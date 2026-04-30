@@ -6,6 +6,8 @@ import AdminDashboard from './pages/Admin/AdminDashboard';
 import RegisterPage from './pages/Register/RegisterPage';
 import LoginPage from './pages/Login/LoginPage';
 import HomePage from './pages/Home/HomePage';
+import MenuPage from './pages/Menu/MenuPage';
+import ProductDetailPage from './pages/Menu/ProductDetailPage';
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 import { ThemeProvider } from './context/ThemeContext';
 import './index.css';
@@ -31,6 +33,8 @@ function App() {
                 <HomePage />
               </ProtectedRoute>
             } />
+            <Route path="/menu" element={<MenuPage />} />
+            <Route path="/product/:id" element={<ProductDetailPage />} />
           </Routes>
         </BrowserRouter>
       </ThemeProvider>

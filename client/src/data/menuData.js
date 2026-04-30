@@ -1,0 +1,80 @@
+export const menuItems = [
+  {
+    id: 1,
+    title: 'Truffle Garden Salad',
+    description: 'Fresh organic greens, shaved black summer truffle, toasted pine nuts, and a delicate honey-citrus emulsion.',
+    price: '24.00',
+    image: '/images/salad.png',
+    tags: ['Vegan', 'Gluten-Free'],
+    sizes: ['Small', 'Regular', 'Large'],
+    category: 'Starters',
+    longDescription: 'Our signature starter features a vibrant medley of seasonal organic greens harvested from local sustainable farms. Each salad is topped with generous shavings of premium black summer truffles and toasted pine nuts for a rich, earthy crunch. The dish is brought together by a house-made honey-citrus emulsion that balances the savory truffle with a bright, refreshing finish.',
+    ingredients: ['Organic Baby Greens', 'Black Summer Truffle', 'Toasted Pine Nuts', 'Wildflower Honey', 'Cold-pressed Citrus', 'Sea Salt'],
+    nutritionalInfo: 'Calories: 280 | Protein: 6g | Carbohydrates: 14g | Fat: 22g'
+  },
+  {
+    id: 2,
+    title: 'Wagyu Beef Medallions',
+    description: 'A5 Wagyu beef served with pomme purée, charred heirloom carrots, and a 24-hour red wine reduction.',
+    price: '85.00',
+    image: '/images/wagyu.png',
+    tags: ['Signature'],
+    sizes: ['Regular', 'Full'],
+    category: 'Mains',
+    longDescription: 'Experience the pinnacle of beef with our A5 Wagyu medallions, sourced directly from the Kagoshima prefecture. Seared to perfection to preserve its characteristic marbling and melt-in-your-mouth texture. Accompanied by silk-smooth pomme purée, heirloom carrots charred in brown butter, and a deep, complex red wine reduction that has been simmered for 24 hours.',
+    ingredients: ['A5 Wagyu Beef', 'Yukon Gold Potatoes', 'Heirloom Carrots', 'Bordeaux Red Wine', 'Cultured Butter', 'Thyme'],
+    nutritionalInfo: 'Calories: 640 | Protein: 42g | Carbohydrates: 18g | Fat: 48g'
+  },
+  {
+    id: 3,
+    title: 'Artisan Margherita',
+    description: 'Sourdough base fermented for 48 hours, San Marzano tomatoes, buffalo mozzarella, and fresh garden basil.',
+    price: '28.00',
+    image: '/images/margherita.png',
+    tags: ['Vegetarian'],
+    sizes: ['Regular', 'Large'],
+    category: 'Mains',
+    longDescription: 'A refined take on a classic. Our sourdough crust undergoes a slow 48-hour fermentation process, resulting in a complex flavor and light, airy texture. Topped with hand-crushed San Marzano tomatoes, fresh DOP buffalo mozzarella, and aromatic basil picked daily from our kitchen garden. Finished with a drizzle of extra virgin olive oil.',
+    ingredients: ['48-hour Sourdough', 'San Marzano Tomatoes', 'Buffalo Mozzarella', 'Fresh Basil', 'Extra Virgin Olive Oil', 'Sea Salt'],
+    nutritionalInfo: 'Calories: 520 | Protein: 22g | Carbohydrates: 64g | Fat: 18g'
+  },
+  {
+    id: 4,
+    title: 'Pan-Seared Salmon',
+    description: 'Atlantic salmon with crispy skin, lemon-butter reduction, and sautéed asparagus tips.',
+    price: '42.00',
+    image: '/images/salmon.png',
+    tags: [],
+    sizes: ['Regular', 'Double'],
+    category: 'Mains',
+    longDescription: 'Sustainably sourced Atlantic salmon, pan-seared to achieve an incredibly crispy skin while maintaining a succulent, medium-rare center. The dish is finished with a delicate lemon-butter reduction and served alongside tender young asparagus tips sautéed in garlic and herbs. A light yet deeply satisfying main course.',
+    ingredients: ['Atlantic Salmon', 'Young Asparagus', 'Lemon', 'European Butter', 'Fresh Dill', 'Garlic'],
+    nutritionalInfo: 'Calories: 410 | Protein: 36g | Carbohydrates: 8g | Fat: 28g'
+  },
+  {
+    id: 5,
+    title: 'Molten Cacao Cake',
+    description: '70% Dark Peruvian chocolate, molten center, served with Madagascar vanilla bean gelato.',
+    price: '18.00',
+    image: '/images/cacao.png',
+    tags: ['Dessert'],
+    sizes: ['Single', 'Double'],
+    category: 'Desserts',
+    longDescription: 'A decadent conclusion to your meal. Our molten cake is crafted from 70% single-origin Peruvian dark chocolate, featuring a perfectly firm exterior and a warm, flowing center. Served with a scoop of house-churned Madagascar vanilla bean gelato, providing a beautiful temperature and flavor contrast.',
+    ingredients: ['Peruvian Dark Chocolate', 'Pasture-raised Eggs', 'Organic Flour', 'Madagascar Vanilla Bean', 'Full-cream Milk', 'Cane Sugar'],
+    nutritionalInfo: 'Calories: 480 | Protein: 7g | Carbohydrates: 52g | Fat: 31g'
+  },
+  {
+    id: 6,
+    title: 'Hibiscus Botanical',
+    description: 'House-distilled botanical spirit, hibiscus syrup, fresh lime, and aromatic bitters.',
+    price: '16.00',
+    image: '/images/hibiscus.png',
+    tags: ['Alcohol-Free'],
+    sizes: ['Regular', 'Large'],
+    category: 'Drinks',
+    longDescription: 'A sophisticated alcohol-free alternative. We use a house-distilled blend of botanicals—including juniper, coriander, and citrus peel—combined with a vibrant hibiscus flower syrup. Shaken with fresh lime juice and finished with aromatic bitters, it offers a complex, floral, and refreshing profile that pairs beautifully with any dish.',
+    ingredients: ['House Botanical Spirit', 'Hibiscus Syrup', 'Fresh Lime', 'Botanical Bitters', 'Sparkling Water', 'Dried Hibiscus Petals'],
+    nutritionalInfo: 'Calories: 95 | Protein: 0g | Carbohydrates: 24g | Fat: 0g'
+  }
+];

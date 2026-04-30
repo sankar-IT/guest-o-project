@@ -8,10 +8,11 @@ import {
   CheckCircle2, Loader2, AlertTriangle, Menu
 } from 'lucide-react';
 import axios from 'axios';
+import api from '../../api/axiosInstance';
 import { useTheme } from '../../context/ThemeContext';
 import { showToast, showAlert } from '../../utils/sweetAlert';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// API_BASE_URL removed, using centralized api instance
 const SOCKET_URL = 'http://localhost:5000';
 
 const NOTIFICATION_SOUND = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
@@ -102,7 +103,7 @@ const KitchenDashboard = () => {
   const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/orders`);
+      const response = await api.get('/api/orders');
       const allOrders = response.data.data || [];
       // Show only confirmed and ready orders in the kitchen panel
       const kitchenOrders = allOrders.filter(o =>
@@ -274,7 +275,7 @@ const KitchenDashboard = () => {
     if (!result.isConfirmed) return;
 
     try {
-      await axios.patch(`${API_BASE_URL}/orders/${orderId}/items/${itemId}/status`, { kitchenStatus: newStatus });
+      await api.patch(`/api/orders/${orderId}/items/${itemId}/status`, { kitchenStatus: newStatus });
       showToast('success', `"${itemName}" → ${labels[newStatus]}`);
       fetchOrders(true);
     } catch (error) {
@@ -297,7 +298,7 @@ const KitchenDashboard = () => {
     if (!result.isConfirmed) return;
 
     try {
-      await axios.patch(`${API_BASE_URL}/orders/${orderId}/status`, { status: 'completed' });
+      await api.patch(`/api/orders/${orderId}/status`, { status: 'completed' });
       showToast('success', `Order ${orderNumber} removed from kitchen`);
       fetchOrders(true);
     } catch (error) {

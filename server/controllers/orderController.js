@@ -2,6 +2,7 @@ import Order from '../models/orderSchema.js';
 import Counter from '../models/counterSchema.js';
 import Menu from '../models/menuSchema.js';
 import Size from '../models/sizeSchema.js';
+import Table from '../models/tableSchema.js';
 import { getIO } from '../socket.js';
 
 const getNextOrderNumber = async () => {
@@ -46,7 +47,7 @@ class OrderController {
         orderNumber,
         orderType: orderType || 'takeaway', 
         orderSource: 'admin',
-        status: 'confirmed',
+        orderStatus: 'placed',
         customerDetails: {
           name: customerDetails?.name || 'Walk-in',
           phone: customerDetails?.phone,
@@ -55,7 +56,7 @@ class OrderController {
         },
         items: items.map(item => ({
           ...item,
-          kitchenStatus: 'pending'
+          kitchenStatus: 'placed'
         })),
         subtotal,
         tax,
@@ -65,7 +66,7 @@ class OrderController {
         cashReceived: cashReceived || 0,
         balance: balance || 0,
         paymentStatus, 
-        status: 'confirmed'
+        orderStatus: 'placed'
       });
 
       await newOrder.save();
@@ -99,37 +100,51 @@ class OrderController {
     }
   }
 
-  async updateOrderStatus(req, res) {
+  async updateOrder(req, res) {
     try {
       const { id } = req.params;
       const updateData = { ...req.body };
 
-      // Fetch original order first to check status change
-      const originalOrder = await Order.findById(id);
-      if (!originalOrder) return res.status(404).json({ success: false, message: 'Order not found' });
+      const order = await Order.findById(id);
+      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-      // Handle Stock Recovery if cancelled
-      if (updateData.status === 'cancelled' && originalOrder.status !== 'cancelled') {
-        await restoreStock(originalOrder.items);
-      }
+      // Handle Stock recovery and reduction if items are changed
+      if (updateData.items) {
+        await restoreStock(order.items);
+        
+        for (const item of updateData.items) {
+          const sizeDoc = await Size.findOne({ name: item.size });
+          const multiplier = sizeDoc ? sizeDoc.value : 1;
+          const reductionAmount = item.quantity * multiplier;
 
-      // Handle Auto-Payment Status for cash updates
-      if (updateData.cashReceived !== undefined || updateData.totalAmount !== undefined) {
-        const cash = updateData.cashReceived ?? originalOrder.cashReceived;
-        const total = updateData.totalAmount ?? originalOrder.totalAmount;
-        if (originalOrder.paymentMethod === 'cash' && cash >= total && total > 0) {
-          updateData.paymentStatus = 'paid';
+          await Menu.findByIdAndUpdate(item.menuItem, {
+            $inc: { totalStock: -reductionAmount }
+          });
         }
       }
 
-      const order = await Order.findByIdAndUpdate(
+      // Handle Stock Recovery if cancelled
+      if (updateData.orderStatus === 'cancelled' && order.orderStatus !== 'cancelled') {
+        await restoreStock(order.items);
+      }
+
+      // Recalculate totals on server for consistency
+      if (updateData.items) {
+        const subtotal = updateData.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        updateData.subtotal = subtotal;
+        updateData.tax = 0;
+        updateData.totalAmount = subtotal;
+      }
+
+      const updatedOrder = await Order.findByIdAndUpdate(
         id,
         { $set: updateData },
         { returnDocument: 'after' }
-      );
+      ).populate('items.menuItem').populate('table');
 
       getIO().emit('ordersUpdated');
-      res.json({ success: true, data: order });
+      res.json({ success: true, data: updatedOrder });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
@@ -200,12 +215,13 @@ class OrderController {
         return res.status(403).json({ success: false, message: 'Order is locked and cannot be edited' });
       }
 
-      order.items.push(...items.map(item => ({ ...item, kitchenStatus: 'pending' })));
+      order.items.push(...items.map(item => ({ ...item, kitchenStatus: 'placed' })));
       
       // Recalculate Totals
       const newSubtotal = order.items.reduce((acc, item) => acc + item.totalPrice, 0);
       order.subtotal = newSubtotal;
-      order.totalAmount = newSubtotal + (order.tax || 0) - (order.discount || 0);
+      order.tax = 0;
+      order.totalAmount = newSubtotal - (order.discount || 0);
       
       // Update cash details if provided or recalculate
       if (req.body.cashReceived !== undefined) {
@@ -273,6 +289,197 @@ class OrderController {
       }
 
       res.json({ success: true, data: order });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // --- New Table Ordering Controllers ---
+
+  /**
+   * @desc Create a new order for a table
+   */
+  async createOrder(req, res) {
+    try {
+      const { tableId, items, orderSource, customerCount } = req.body;
+      const guests = Number(customerCount) || 1;
+
+      // Check table availability
+      const table = await Table.findById(tableId);
+      if (!table) return res.status(404).json({ success: false, message: 'Table not found' });
+
+      const availableSeats = Math.max(0, table.capacity - table.occupiedSeats);
+      if (guests > availableSeats) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Insufficient seats. Only ${availableSeats} seats available, but requested ${guests}.` 
+        });
+      }
+
+      // Recalculate totals on server for consistency
+      const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const tax = 0;
+      const totalAmount = subtotal;
+
+      const orderNumber = await getNextOrderNumber();
+
+      const newOrder = new Order({
+        orderNumber,
+        orderType: 'dine-in',
+        orderSource: orderSource || 'waiter',
+        table: tableId,
+        sessionId: `SESS-${Date.now()}`,
+        items,
+        subtotal,
+        tax,
+        totalAmount,
+        orderStatus: 'placed',
+        customerDetails: {
+          name: 'Walk-in',
+          phone: '',
+          numberOfGuests: guests
+        }
+      });
+
+      await newOrder.save();
+
+      // Update table occupancy
+      const newOccupied = table.occupiedSeats + guests;
+      let status = 'partial';
+      if (newOccupied >= table.capacity) status = 'full';
+      if (newOccupied === 0) status = 'empty';
+
+      await Table.findByIdAndUpdate(tableId, { 
+        occupiedSeats: newOccupied,
+        status: status
+      });
+
+      getIO().emit('ordersUpdated');
+      res.status(201).json({ success: true, data: newOrder });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * @desc Get all items ordered for a specific table
+   */
+  async getOrdersByTable(req, res) {
+    try {
+      const { tableId } = req.params;
+      
+      // Fetch all orders for this table, sorted by latest first
+      const orders = await Order.find({ table: tableId })
+        .populate('items.menuItem')
+        .sort({ createdAt: -1 });
+      
+      res.status(200).json({ 
+        success: true, 
+        tableId,
+        count: orders.length,
+        orders: orders 
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * @desc Update status of an order
+   */
+  async updateOrderStatus(req, res) {
+    try {
+      const { orderId } = req.params;
+      const { status } = req.body;
+
+      const order = await Order.findByIdAndUpdate(
+        orderId,
+        { status },
+        { new: true, runValidators: true }
+      );
+
+      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+      getIO().emit('ordersUpdated');
+      res.status(200).json({ success: true, data: order });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * @desc Update payment status
+   */
+  async updatePaymentStatus(req, res) {
+    try {
+      const { orderId } = req.params;
+      const { paymentStatus } = req.body;
+
+      const order = await Order.findByIdAndUpdate(
+        orderId,
+        { paymentStatus },
+        { new: true, runValidators: true }
+      );
+
+      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+      res.status(200).json({ success: true, data: order });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  /**
+   * @desc Delete/Complete order and free up table
+   */
+  async deleteTableOrder(req, res) {
+    try {
+      const { orderId } = req.params;
+      const order = await Order.findById(orderId);
+      
+      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+      const tableId = order.table;
+      const guestsToFree = order.customerDetails?.numberOfGuests || 0;
+
+      await Order.findByIdAndDelete(orderId);
+
+      // Update table occupancy by subtracting only the guests from this order
+      if (tableId) {
+        const table = await Table.findById(tableId);
+        if (table) {
+          const newOccupied = Math.max(0, table.occupiedSeats - guestsToFree);
+          let status = 'empty';
+          if (newOccupied > 0 && newOccupied < table.capacity) status = 'partial';
+          if (newOccupied >= table.capacity) status = 'full';
+
+          await Table.findByIdAndUpdate(tableId, { 
+            status: status,
+            occupiedSeats: newOccupied 
+          });
+        }
+      }
+
+      getIO().emit('ordersUpdated');
+      res.status(200).json({ success: true, message: 'Order completed and table freed' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getOrderById(req, res) {
+    try {
+      const { orderId } = req.params;
+      const order = await Order.findById(orderId)
+        .populate('items.menuItem')
+        .populate('table')
+        .populate('createdBy', 'name role');
+
+      if (!order) {
+        return res.status(404).json({ success: false, message: 'Order not found' });
+      }
+
+      res.status(200).json({ success: true, data: order });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }

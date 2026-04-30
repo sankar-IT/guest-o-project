@@ -22,6 +22,12 @@ const tableSchema = new mongoose.Schema({
     default: "empty"
   },
 
+  occupiedSeats: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
   
   isActive: {
     type: Boolean,

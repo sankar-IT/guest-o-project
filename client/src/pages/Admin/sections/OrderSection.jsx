@@ -7,9 +7,10 @@ import {
   Copy, MapPin, ExternalLink
 } from 'lucide-react';
 import axios from 'axios';
+import api from '../../../api/axiosInstance';
 import { showAlert, showToast, showDeleteConfirmation } from '../../../utils/sweetAlert';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// API_BASE_URL removed, using centralized api instance
 
 const OrderSection = () => {
   const handleCopyForWhatsApp = (order) => {
@@ -163,7 +164,7 @@ const OrderSection = () => {
   const fetchOrders = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/orders`);
+      const response = await api.get('/api/orders');
       setOrders(response.data.data);
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -250,7 +251,7 @@ const OrderSection = () => {
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
-      const response = await axios.patch(`${API_BASE_URL}/orders/${orderId}/status`, { status: newStatus });
+      const response = await api.patch(`/api/orders/${orderId}/status`, { status: newStatus });
       if (response.data.success) {
         showToast('success', `Order marked as ${newStatus}`);
         setOrders(orders.map(o => o._id === orderId ? response.data.data : o));
@@ -263,7 +264,7 @@ const OrderSection = () => {
 
   const handleUpdateItemStatus = async (orderId, itemId, newStatus) => {
     try {
-      const response = await axios.patch(`${API_BASE_URL}/orders/${orderId}/items/${itemId}/status`, { kitchenStatus: newStatus });
+      const response = await api.patch(`/api/orders/${orderId}/items/${itemId}/status`, { kitchenStatus: newStatus });
       if (response.data.success) {
         showToast('success', 'Status updated');
         // Update local state for both order list and selected order modal
@@ -278,7 +279,7 @@ const OrderSection = () => {
 
   const handleUpdatePaymentStatus = async (orderId, newStatus) => {
     try {
-      const response = await axios.patch(`${API_BASE_URL}/orders/${orderId}/status`, { paymentStatus: newStatus });
+      const response = await api.patch(`/api/orders/${orderId}/status`, { paymentStatus: newStatus });
       if (response.data.success) {
         showToast('success', `Payment marked as ${newStatus}`);
         setOrders(orders.map(o => o._id === orderId ? response.data.data : o));
@@ -308,7 +309,7 @@ const OrderSection = () => {
       const cash = parseFloat(editCashReceived) || 0;
       const balance = cash - subtotal;
       
-      const response = await axios.patch(`${API_BASE_URL}/orders/${selectedOrder._id}/status`, { 
+      const response = await api.patch(`/api/orders/${selectedOrder._id}/status`, { 
         customerDetails: editCustomer,
         cashReceived: cash,
         balance: balance

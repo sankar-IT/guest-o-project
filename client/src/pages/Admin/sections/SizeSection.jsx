@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, Loader2, ArrowUpDown, XCircle, RotateCcw } from 'lucide-react';
 import axios from 'axios';
+import api from '../../../api/axiosInstance';
 import { showAlert, showToast, showDeleteConfirmation } from '../../../utils/sweetAlert';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// API_BASE_URL removed, using centralized api instance
 
 const SizeSection = () => {
   const [sizes, setSizes] = useState([]);
@@ -45,8 +46,8 @@ const SizeSection = () => {
   const fetchSizes = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/sizes`);
-      setSizes(response.data);
+      const response = await api.get('/api/sizes');
+      setSizes(response.data.data || []);
     } catch (error) {
       console.error('Error fetching sizes:', error);
     } finally {
@@ -71,9 +72,9 @@ const SizeSection = () => {
 
     try {
       if (isEditing) {
-        await axios.put(`${API_BASE_URL}/sizes/${currentSize._id}`, currentSize);
+        await api.put(`/api/sizes/${currentSize._id}`, currentSize);
       } else {
-        await axios.post(`${API_BASE_URL}/sizes`, currentSize);
+        await api.post('/api/sizes', currentSize);
       }
       fetchSizes();
       setIsModalOpen(false);
@@ -92,7 +93,7 @@ const SizeSection = () => {
     
     if (result.isConfirmed) {
       try {
-        await axios.delete(`${API_BASE_URL}/sizes/${id}`);
+        await api.delete(`/api/sizes/${id}`);
         fetchSizes();
         showToast('success', 'Size deleted successfully');
       } catch (error) {

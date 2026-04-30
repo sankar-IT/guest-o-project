@@ -1,5 +1,5 @@
+import 'dotenv/config';
 import express from 'express';
-import dotenv from 'dotenv';
 // Force restart to apply schema changes
 import cors from 'cors';
 import connectDB from './config/db.js';
@@ -10,8 +10,7 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import sizeRoutes from './routes/sizeRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import staffRoutes from './routes/staffRoutes.js';
-
-dotenv.config();
+import tableRoutes from './routes/tableRoutes.js';
 
 const app = express();
 
@@ -39,6 +38,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/sizes', sizeRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/tables', tableRoutes);
 
 
 app.get('/health', (req, res) => {

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, CheckCircle, XCircle, Search, Loader2, ArrowUpDown, Filter, Image as ImageIcon, RotateCcw } from 'lucide-react';
 import axios from 'axios';
+import api from '../../../api/axiosInstance';
 import { showAlert, showToast, showDeleteConfirmation } from '../../../utils/sweetAlert';
 import ImageCropper from '../../../components/ImageCropper/ImageCropper';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// API_BASE_URL removed, using centralized api instance
 
 const CategorySection = () => {
   const [categories, setCategories] = useState([]);
@@ -29,8 +30,8 @@ const CategorySection = () => {
   const fetchCategories = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/categories`);
-      setCategories(response.data);
+      const response = await api.get('/api/categories');
+      setCategories(response.data.data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     } finally {
@@ -75,7 +76,7 @@ const CategorySection = () => {
 
     setIsUploading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/upload/image`, {
+      const response = await fetch(`http://localhost:5000/api/upload/image`, {
         method: 'POST',
         body: formData,
       });
@@ -114,9 +115,9 @@ const CategorySection = () => {
 
     try {
       if (isEditing) {
-        await axios.put(`${API_BASE_URL}/categories/${currentCategory._id}`, currentCategory);
+        await api.put(`/api/categories/${currentCategory._id}`, currentCategory);
       } else {
-        await axios.post(`${API_BASE_URL}/categories`, currentCategory);
+        await api.post('/api/categories', currentCategory);
       }
       fetchCategories();
       setIsModalOpen(false);
@@ -136,7 +137,7 @@ const CategorySection = () => {
     
     if (result.isConfirmed) {
       try {
-        await axios.delete(`${API_BASE_URL}/categories/${id}`);
+        await api.delete(`/api/categories/${id}`);
         fetchCategories();
         showToast('success', 'Category deleted successfully');
       } catch (error) {

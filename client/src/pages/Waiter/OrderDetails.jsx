@@ -81,7 +81,7 @@ const OrderDetails = () => {
 
   const confirmRemoveItem = async () => {
     if (!isDeleting) return;
-    
+
     try {
       // Start the removal animation
       setIsAnimating(isDeleting);
@@ -91,7 +91,7 @@ const OrderDetails = () => {
       setTimeout(async () => {
         try {
           const response = await api.patch(`/api/orders/${orderId}/items/${isDeleting}/remove`);
-          
+
           if (response.data.success) {
             // Update items from the response to be most accurate
             setItems(response.data.data.items || []);

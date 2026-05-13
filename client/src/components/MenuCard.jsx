@@ -22,7 +22,7 @@ const MenuCard = ({ id, title, description, price, image, tags, sizes }) => {
         
         {sizes && sizes.length > 0 && (
           <div className="menu-card-sizes mt-2 mb-4">
-            <span className="sizes-label block text-[10px] uppercase tracking-wider text-muted mb-2 font-bold">Available Sizes:</span>
+            <span className="sizes-label block text-[10px] uppercase tracking-wider text-muted mb-2 font-bold opacity-60">Available Sizes:</span>
             <div className="flex flex-wrap gap-2">
               {sizes.map((size) => (
                 <span key={size} className="size-chip px-2 py-1 bg-surface-muted text-secondary text-[11px] font-bold rounded-md border border-border">
@@ -33,6 +33,7 @@ const MenuCard = ({ id, title, description, price, image, tags, sizes }) => {
           </div>
         )}
 
+        <p className="menu-card-description">{description}</p>
         <button className="add-to-cart-btn">View Details</button>
       </div>
     </Link>

@@ -1,3 +1,4 @@
+import categoryRepository from '../repositories/categoryRepository.js';
 import categoryService from "../services/categoryService.js";
 
 export const createCategory = async (req, res) => {
@@ -11,8 +12,16 @@ export const createCategory = async (req, res) => {
 
 export const getCategories = async (req, res) => {
   try {
+<<<<<<< HEAD
     const categories = await categoryService.getAllCategories();
     res.status(200).json({ success: true, data: categories });
+=======
+    // Prefer the service layer if it exists, otherwise fallback to repository
+    const categories = categoryService
+      ? await categoryService.getAllCategories()
+      : await categoryRepository.getAll();
+    res.status(200).json(categories);
+>>>>>>> develop
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

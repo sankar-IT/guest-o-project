@@ -3,20 +3,27 @@ import { useParams, Link } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { Sun, Moon, Loader2, ArrowLeft } from 'lucide-react';
 import api from '../../api/axiosInstance';
+import { useCart } from '../../context/CartContext';
 
 const ProductDetailPage = () => {
   const { id } = useParams();
   const { theme, toggleTheme } = useTheme();
+  const { addToCart } = useCart();
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedVariant, setSelectedVariant] = useState(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
     const fetchProduct = async () => {
       setIsLoading(true);
       try {
-        const response = await api.get(`/api/menu/${id}`);
-        setProduct(response.data.data);
+        const response = await api.get(`/api/menus/${id}`);
+        const data = response.data.data || response.data;
+        setProduct(data);
+        if (data.variants?.length > 0) {
+          setSelectedVariant(data.variants[0]);
+        }
       } catch (error) {
         console.error('Error fetching product details:', error);
       } finally {
@@ -45,9 +52,13 @@ const ProductDetailPage = () => {
     );
   }
 
-  const price = product.hasOffer ? product.offerPrice : (product.variants?.[0]?.price || '0');
-  const sizes = product.variants?.map(v => v.size?.name).filter(Boolean);
+  const price = product.hasOffer ? product.offerPrice : (selectedVariant?.price || '0');
   const tags = [product.foodType, ...(product.isBlocked ? ['Unavailable'] : [])];
+
+  const handleAddToCart = () => {
+    if (!selectedVariant) return;
+    addToCart(product, selectedVariant);
+  };
 
   return (
     <div className="product-detail-page pt-4 pb-12 min-h-screen bg-surface">
@@ -100,14 +111,22 @@ const ProductDetailPage = () => {
                   ₹{price}
                 </span>
                 
-                {(sizes && sizes.length > 0) && (
+                {product.variants?.length > 0 && (
                   <>
                     <div className="h-4 w-[1px] bg-primary/20"></div>
                     <div className="flex gap-2">
-                      {sizes.map((size) => (
-                        <span key={size} className="px-3 py-1 border border-primary/20 text-[10px] uppercase tracking-wider font-bold rounded-md text-primary/60 bg-surface-menu">
-                          {size}
-                        </span>
+                      {product.variants.map((v) => (
+                        <button 
+                          key={v.size} 
+                          onClick={() => setSelectedVariant(v)}
+                          className={`px-3 py-1 border transition-all text-[10px] uppercase tracking-wider font-bold rounded-md ${
+                            selectedVariant?.size === v.size 
+                            ? 'border-primary bg-primary text-white' 
+                            : 'border-primary/20 text-primary/60 bg-surface-menu'
+                          }`}
+                        >
+                          {v.size}
+                        </button>
                       ))}
                     </div>
                   </>
@@ -137,8 +156,12 @@ const ProductDetailPage = () => {
             </div>
 
             <div className="actions flex flex-col sm:flex-row gap-3">
-              <button className="flex-1 py-4 bg-primary text-white rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-primary-light transition-all shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5">
-                Add to Selection
+              <button 
+                onClick={handleAddToCart}
+                disabled={product.isBlocked || product.totalStock <= 0}
+                className="flex-1 py-4 bg-primary text-white rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-primary-light transition-all shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {product.isBlocked ? 'Currently Unavailable' : product.totalStock <= 0 ? 'Out of Stock' : 'Add to Cart'}
               </button>
               <button className="flex-1 py-4 border border-primary/20 text-primary rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-primary hover:text-white transition-all">
                 Customise Order

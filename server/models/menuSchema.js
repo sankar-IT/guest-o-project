@@ -42,7 +42,29 @@ const menuSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 0
-      }
+      },
+      costPrice: {
+        type: Number,
+        default: 0,
+        min: 0
+      },
+      stockValue: {
+        type: Number,
+        default: 1
+      },
+      includedItems: [
+        {
+          menuItem: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Menu"
+          },
+          name: String, // Optional: store name for easy display if needed
+          quantity: {
+            type: Number,
+            default: 1
+          }
+        }
+      ]
     }
   ],
 

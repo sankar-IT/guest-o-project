@@ -1,28 +1,62 @@
-import menuRepository from "../repositories/menuRepository.js";
+import menuRepository from '../repositories/menuRepository.js';
+import menuService from "../services/menuService.js";
 
-// 1. Get all menu items with optional query filters
+// 1. Create a new menu item
+export const createMenu = async (req, res) => {
+  try {
+    const menu = await menuService.createMenu(req.body);
+    res.status(201).json({
+      success: true,
+      data: menu
+    });
+  } catch (error) {
+    res.status(400).json({ 
+      success: false,
+      message: "Error creating menu item",
+      error: error.message 
+    });
+  }
+};
+
+// 2. Get all menu items with optional query filters
 export const getMenus = async (req, res) => {
   try {
-    const { category, search } = req.query;
-    let query = {};
+    const { category, page, limit, all, search } = req.query;
 
-    if (category) {
+    if (all === 'true') {
+      const menus = await menuService.getAllMenus();
+      return res.status(200).json({
+        success: true,
+        data: menus
+      });
+    }
+
+    let filter = {};
+    if (category && category !== 'all') {
       if (category === "veg" || category === "non-veg") {
-        query.foodType = category;
+        filter.foodType = category;
       } else {
-        query.category = category;
+        filter.category = category;
       }
     }
 
     if (search) {
-      query.name = { $regex: search, $options: "i" };
+      filter.name = { $regex: search, $options: "i" };
     }
 
-    const menuItems = await menuRepository.findAll(query);
+    if (page && limit) {
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      const menus = await menuRepository.getAll(filter, skip, parseInt(limit));
+      return res.status(200).json({
+        success: true,
+        data: menus
+      });
+    }
 
+    const menus = await menuRepository.getAll(filter);
     res.status(200).json({
       success: true,
-      data: menuItems,
+      data: menus
     });
   } catch (error) {
     res.status(500).json({
@@ -33,45 +67,25 @@ export const getMenus = async (req, res) => {
   }
 };
 
-// 2. Get a single menu item by ID
-export const getMenuItemById = async (req, res) => {
+// 3. Get a single menu item by ID
+export const getMenuById = async (req, res) => {
   try {
-    const { id } = req.params;
-    const menuItem = await menuRepository.findById(id);
-
-    if (!menuItem) {
-      return res.status(404).json({
+    const menu = await menuRepository.findById(req.params.id);
+    if (!menu) {
+      return res.status(404).json({ 
         success: false,
-        message: "Menu item not found",
+        message: 'Menu item not found' 
       });
     }
-
     res.status(200).json({
       success: true,
-      data: menuItem,
+      data: menu
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(500).json({ 
       success: false,
       message: "Error fetching menu item",
-      error: error.message,
-    });
-  }
-};
-
-// 3. Create a new menu item
-export const createMenu = async (req, res) => {
-  try {
-    const newMenu = await menuRepository.create(req.body);
-    res.status(201).json({
-      success: true,
-      data: newMenu,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: "Error creating menu item",
-      error: error.message,
+      error: error.message 
     });
   }
 };

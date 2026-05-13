@@ -2,7 +2,7 @@ import express from "express";
 import {
   createMenu,
   getMenus,
-  getMenuItemById,
+  getMenuById,
   updateMenu,
   deleteMenu,
 } from "../controllers/menuController.js";
@@ -11,7 +11,7 @@ const router = express.Router();
 
 router.post("/", createMenu);
 router.get("/", getMenus);
-router.get("/:id", getMenuItemById);
+router.get("/:id", getMenuById);
 router.put("/:id", updateMenu);
 router.delete("/:id", deleteMenu);
 

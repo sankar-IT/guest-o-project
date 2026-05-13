@@ -19,11 +19,11 @@ const MenuPage = () => {
       setIsLoading(true);
       try {
         const [menuRes, catRes] = await Promise.all([
-          api.get('/api/menu'),
+          api.get('/api/menus?all=true'),
           api.get('/api/categories')
         ]);
-        setMenuItems(menuRes.data.data || []);
-        setCategories(catRes.data.data || []);
+        setMenuItems(menuRes.data.data || menuRes.data || []);
+        setCategories((catRes.data.data || catRes.data || []).filter(c => c.isActive));
       } catch (error) {
         console.error('Error fetching menu data:', error);
       } finally {
@@ -35,7 +35,7 @@ const MenuPage = () => {
 
   const filteredItems = menuItems.filter(item => {
     const matchesCategory = activeCategory === 'All' || 
-                            (item.category && (item.category.name === activeCategory || item.category === activeCategory));
+                            (item.category && (item.category.name === activeCategory || item.category === activeCategory || item.category._id === activeCategory));
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
@@ -53,9 +53,9 @@ const MenuPage = () => {
     <div className="menu-page">
       <div className="container-menu">
         <div className="header-top flex justify-between items-center">
-          <div className="header-left-actions">
+          <div className="header-left-actions flex items-center gap-4">
             <button 
-              className="back-btn" 
+              className="back-btn p-2 hover:bg-surface-muted rounded-full transition-all" 
               onClick={() => navigate(-1)}
               title="Go Back"
             >
@@ -77,9 +77,10 @@ const MenuPage = () => {
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
         </div>
-        <header className="menu-main-header">
-          <h1 className="menu-main-title">Our Menu</h1>
-          <p className="menu-main-subtitle">
+
+        <header className="section-header">
+          <h1 className="section-title">Our Menu</h1>
+          <p className="section-subtitle">
             Discover a curated collection of seasonal flavors, meticulously crafted by our chefs to bring the essence of fine dining to your table.
           </p>
         </header>
@@ -105,7 +106,7 @@ const MenuPage = () => {
             >
               All
             </button>
-            {categories.filter(c => c.isActive).map((cat) => (
+            {categories.map((cat) => (
               <button 
                 key={cat._id} 
                 className={`category-tab ${activeCategory === cat.name ? 'active' : ''}`}
@@ -127,7 +128,7 @@ const MenuPage = () => {
                   price={item.hasOffer ? item.offerPrice : (item.variants?.[0]?.price || '0')}
                   image={item.image}
                   tags={[item.foodType, ...(item.isBlocked ? ['Unavailable'] : [])]}
-                  sizes={item.variants?.map(v => v.size?.name).filter(Boolean)}
+                  sizes={item.variants?.map(v => v.size).filter(Boolean)}
                 />
               ))
             ) : (

@@ -14,7 +14,10 @@ class AuthController {
           id: user._id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
+          avatar: user.avatar,
           role: user.role,
+          createdAt: user.createdAt,
           token: authService.generateToken(user._id)
         }
       });
@@ -29,8 +32,8 @@ class AuthController {
   async login(req, res) {
     try {
       const { email, password } = req.body;
-      const user = await authService.login(email, password);
-      
+      const user = await authService.login(email, password, null);
+
       res.status(200).json({
         success: true,
         message: 'Login successful',
@@ -38,7 +41,10 @@ class AuthController {
           id: user._id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
+          avatar: user.avatar,
           role: user.role,
+          createdAt: user.createdAt,
           token: authService.generateToken(user._id)
         }
       });
@@ -51,12 +57,11 @@ class AuthController {
     }
   }
 
-  // Preserve admin login for dashboard
   async adminLogin(req, res) {
     try {
       const { email, password } = req.body;
       const user = await authService.login(email, password, 'admin');
-      
+
       res.status(200).json({
         success: true,
         message: 'Admin login successful',
@@ -64,7 +69,10 @@ class AuthController {
           id: user._id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
+          avatar: user.avatar,
           role: user.role,
+          createdAt: user.createdAt,
           token: authService.generateToken(user._id)
         }
       });
@@ -79,9 +87,14 @@ class AuthController {
 
   async googleLogin(req, res) {
     try {
+      console.log('📬 Received Google login request...');
       const { token } = req.body;
+      if (!token) {
+        console.error('❌ No token provided in request body');
+        return res.status(400).json({ success: false, message: 'No token provided' });
+      }
       const user = await authService.googleLogin(token);
-      
+
       res.status(200).json({
         success: true,
         message: 'Google login successful',
@@ -89,7 +102,10 @@ class AuthController {
           id: user._id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
+          avatar: user.avatar,
           role: user.role,
+          createdAt: user.createdAt,
           token: authService.generateToken(user._id)
         }
       });
@@ -104,17 +120,9 @@ class AuthController {
 
   async sendOTP(req, res) {
     try {
-      const { email } = req.body;
-      
-      const existingUser = await authService.checkExistingUser(email);
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          message: 'User with this email already exists'
-        });
-      }
+      const { email, phone } = req.body;
 
-      await authService.sendOTP(email);
+      await authService.sendOTP(email, phone);
       res.status(200).json({
         success: true,
         message: 'OTP sent to your email'
@@ -131,7 +139,7 @@ class AuthController {
     try {
       const { email, otp, userData } = req.body;
       const isOTPValid = await authService.verifyOTP(email, otp);
-      
+
       if (!isOTPValid) {
         return res.status(400).json({
           success: false,
@@ -147,7 +155,10 @@ class AuthController {
           id: user._id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
+          avatar: user.avatar,
           role: user.role,
+          createdAt: user.createdAt,
           token: authService.generateToken(user._id)
         }
       });
@@ -159,6 +170,7 @@ class AuthController {
     }
   }
 
+<<<<<<< HEAD
   /**
    * @desc Staff login for administrative access
    * @route POST /api/auth/staff-login
@@ -228,6 +240,42 @@ class AuthController {
         message: 'Internal server error',
         error: error.message
       });
+=======
+  async sendPasswordResetOTP(req, res) {
+    try {
+      const { email } = req.body;
+      await authService.sendPasswordResetOTP(email);
+      res.status(200).json({
+        success: true,
+        message: 'OTP sent successfully'
+      });
+    } catch (error) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+
+  async verifyPasswordResetOTP(req, res) {
+    try {
+      const { email, otp } = req.body;
+      const isValid = await authService.verifyOTP(email, otp);
+      if (isValid) {
+        res.status(200).json({ success: true, message: 'OTP verified' });
+      } else {
+        res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+      }
+    } catch (error) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+
+  async resetPassword(req, res) {
+    try {
+      const { email, newPassword } = req.body;
+      await authService.resetPassword(email, newPassword);
+      res.status(200).json({ success: true, message: 'Password reset successful' });
+    } catch (error) {
+      res.status(400).json({ success: false, message: error.message });
+>>>>>>> develop
     }
   }
 }

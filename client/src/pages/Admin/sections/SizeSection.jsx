@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2, Search, Loader2, ArrowUpDown, XCircle, RotateCcw }
 import axios from 'axios';
 import api from '../../../api/axiosInstance';
 import { showAlert, showToast, showDeleteConfirmation } from '../../../utils/sweetAlert';
+import Loader from '../../../components/Loader/Loader';
 
 // API_BASE_URL removed, using centralized api instance
 
@@ -172,10 +173,10 @@ const SizeSection = () => {
             <tbody className="divide-y divide-border-light">
               {isLoading ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center space-y-2">
-                      <Loader2 className="animate-spin text-primary" size={32} />
-                      <p className="text-text-secondary font-medium">Loading sizes...</p>
+                  <td colSpan="5" className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-6">
+                      <Loader size="large" />
+                      <p className="text-text-secondary text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Loading sizes...</p>
                     </div>
                   </td>
                 </tr>

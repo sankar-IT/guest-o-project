@@ -3,12 +3,9 @@ import Cart from '../models/cartSchema.js';
 import User from '../models/userSchema.js';
 import Counter from '../models/counterSchema.js';
 import Menu from '../models/menuSchema.js';
-<<<<<<< HEAD
 import Size from '../models/sizeSchema.js';
 import Table from '../models/tableSchema.js';
-=======
 import Settings from '../models/settingsSchema.js';
->>>>>>> develop
 import { getIO } from '../socket.js';
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -24,7 +21,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const expandUrl = async (url) => {
-  if (!url || !url.includes('maps.app.goo.gl') && !url.includes('share.google')) return url;
+  if (!url || (!url.includes('maps.app.goo.gl') && !url.includes('share.google'))) return url;
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -42,7 +39,6 @@ const expandUrl = async (url) => {
 
 const extractCoordinates = (url) => {
   if (!url) return null;
-  // Look for lat,lng pair. Try to find one that looks like coordinates.
   const coordRegex = /([-.\d]+),([-.\d]+)/g;
   let match;
   while ((match = coordRegex.exec(url)) !== null) {
@@ -60,7 +56,7 @@ const calculateRoadDistance = async (lat1, lon1, lat2, lon2) => {
     const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`);
     const data = await response.json();
     if (data.routes && data.routes.length > 0) {
-      return data.routes[0].distance / 1000; // convert meters to km
+      return data.routes[0].distance / 1000;
     }
     return calculateDistance(lat1, lon1, lat2, lon2);
   } catch (error) {
@@ -116,20 +112,17 @@ const handleStock = async (items, type = 'reduce') => {
       const amount = item.quantity * multiplier;
       const factor = type === 'reduce' ? -1 : 1;
 
-      // Update main item stock
       const updatedMenu = await Menu.findByIdAndUpdate(
         item.menuItem,
         { $inc: { totalStock: factor * amount } },
         { new: true }
       );
 
-      // Force floor at 0 if it somehow went negative
       if (updatedMenu && updatedMenu.totalStock < 0) {
         await Menu.findByIdAndUpdate(item.menuItem, { totalStock: 0 });
         updatedMenu.totalStock = 0;
       }
 
-      // Real-time Stock Alerts (Only on reduction)
       if (type === 'reduce' && updatedMenu) {
         if (updatedMenu.totalStock <= 0) {
           getIO().emit('stockAlert', {
@@ -148,7 +141,6 @@ const handleStock = async (items, type = 'reduce') => {
         }
       }
 
-      // Update included items stock
       if (variant && variant.includedItems && variant.includedItems.length > 0) {
         for (const included of variant.includedItems) {
           const includedReduction = item.quantity * included.quantity;
@@ -163,7 +155,6 @@ const handleStock = async (items, type = 'reduce') => {
             updatedIncluded.totalStock = 0;
           }
 
-          // Stock Alerts for included items
           if (type === 'reduce' && updatedIncluded) {
             if (updatedIncluded.totalStock <= 0) {
               getIO().emit('stockAlert', {
@@ -200,16 +191,14 @@ class OrderController {
     try {
       const { items, address, paymentMethod, totalAmount, subtotal, discount, tax, razorpayOrderId, razorpayPaymentId } = req.body;
 
-      // Check Stock First
       const stockCheck = await checkStockAvailability(items);
       if (!stockCheck.available) {
         return res.status(400).json({ success: false, message: `Insufficient stock for: ${stockCheck.itemName}` });
       }
 
-      // Handle Wallet Payment
       if (paymentMethod === 'wallet') {
         const user = await User.findById(req.user._id);
-        const orderTotal = totalAmount; // totalAmount should already include fee/tax/discount
+        const orderTotal = totalAmount;
 
         if (user.walletBalance < orderTotal) {
           return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
@@ -224,14 +213,12 @@ class OrderController {
         await user.save();
       }
 
-      // Determine Order Source and Type
       const isUser = req.user.role === 'user';
       const finalOrderSource = isUser ? 'user' : (req.user.role || 'admin');
       const finalOrderType = isUser ? 'delivery' : (req.body.orderType || 'dine-in');
 
       const orderNumber = await getNextOrderNumber();
 
-      // Calculate delivery fee on server for security
       let deliveryFee = 0;
       if (finalOrderType === 'delivery' && address.location) {
         const settings = await Settings.getSettings();
@@ -239,7 +226,6 @@ class OrderController {
         const restLat = settings.restaurantDetails?.location?.lat || parseFloat(process.env.RESTAURANT_LAT || '10.668194');
         const restLng = settings.restaurantDetails?.location?.lng || parseFloat(process.env.RESTAURANT_LNG || '76.025111');
 
-        // Try to match coordinates from Google Maps URL or string
         let targetUrl = address.location;
         if (targetUrl.includes('maps.app.goo.gl') || targetUrl.includes('share.google')) {
           targetUrl = await expandUrl(targetUrl);
@@ -309,10 +295,8 @@ class OrderController {
 
       await newOrder.save();
 
-      // Reduce Stock
       await handleStock(items, 'reduce');
 
-      // Update wallet transaction description with order number
       if (paymentMethod === 'wallet') {
         const user = await User.findById(req.user._id);
         const lastTx = user.walletTransactions[user.walletTransactions.length - 1];
@@ -320,7 +304,6 @@ class OrderController {
         await user.save();
       }
 
-      // Clear cart
       await Cart.findOneAndDelete({ customer: req.user._id }).catch(() => { });
       await Cart.findOneAndDelete({ user: req.user._id }).catch(() => { });
 
@@ -330,11 +313,11 @@ class OrderController {
         data: newOrder
       });
 
-      // Global Notification
       getIO().emit('newOrder', {
         order: newOrder,
         message: `🔔 New ${newOrder.orderType.toUpperCase()} Order Received! (#${newOrder.orderNumber})`
       });
+      getIO().emit('ordersUpdated');
     } catch (error) {
       console.error('Order Error Details:', error);
       res.status(500).json({
@@ -378,10 +361,8 @@ class OrderController {
         });
       }
 
-      // Restore Stock
       await restoreStock(order.items);
 
-      // Refund to wallet if paid
       if (order.paymentStatus === 'paid') {
         const user = await User.findById(req.user._id);
         user.walletBalance += order.totalAmount;
@@ -403,6 +384,7 @@ class OrderController {
           ? 'Order cancelled and amount refunded to your wallet'
           : 'Order cancelled successfully'
       });
+      getIO().emit('ordersUpdated');
     } catch (error) {
       res.status(500).json({
         success: false,
@@ -416,13 +398,6 @@ class OrderController {
 
   async createCounterOrder(req, res) {
     try {
-<<<<<<< HEAD
-      const { customerDetails, items, orderType, paymentMethod, subtotal, tax, discount, totalAmount, cashReceived, balance } = req.body;
-
-      const orderNumber = await getNextOrderNumber();
-
-      // Auto-set payment status for cash
-=======
       const { customerDetails, items, orderType, paymentMethod, subtotal, tax, deliveryFee, discount, totalAmount, cashReceived, balance } = req.body;
 
       const stockCheck = await checkStockAvailability(items);
@@ -432,7 +407,6 @@ class OrderController {
 
       const orderNumber = await getNextOrderNumber();
 
->>>>>>> develop
       let paymentStatus = 'pending';
       if (paymentMethod === 'cash' && cashReceived >= totalAmount) {
         paymentStatus = 'paid';
@@ -449,11 +423,6 @@ class OrderController {
           address: customerDetails?.address,
           location: customerDetails?.location,
         },
-<<<<<<< HEAD
-        items: items.map(item => ({
-          ...item,
-          kitchenStatus: 'placed'
-=======
         items: await Promise.all(items.map(async item => {
           const menuDoc = await Menu.findById(item.menuItem);
           const variant = menuDoc?.variants?.find(v => v.size === item.size);
@@ -464,7 +433,6 @@ class OrderController {
             costPrice: variant?.costPrice || 0,
             kitchenStatus: 'placed'
           };
->>>>>>> develop
         })),
         subtotal,
         tax,
@@ -474,12 +442,7 @@ class OrderController {
         paymentMethod,
         cashReceived: cashReceived || 0,
         balance: balance || 0,
-<<<<<<< HEAD
-        paymentStatus,
-        orderStatus: 'placed'
-=======
         paymentStatus
->>>>>>> develop
       });
 
       await newOrder.save();
@@ -516,49 +479,9 @@ class OrderController {
       const { id } = req.params;
       const updateData = { ...req.body };
 
-<<<<<<< HEAD
-      const order = await Order.findById(id);
-      if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-
-      // Handle Stock recovery and reduction if items are changed
-      if (updateData.items) {
-        await restoreStock(order.items);
-
-        for (const item of updateData.items) {
-          const sizeDoc = await Size.findOne({ name: item.size });
-          const multiplier = sizeDoc ? sizeDoc.value : 1;
-          const reductionAmount = item.quantity * multiplier;
-
-          await Menu.findByIdAndUpdate(item.menuItem, {
-            $inc: { totalStock: -reductionAmount }
-          });
-        }
-      }
-
-      // Handle Stock Recovery if cancelled
-      if (updateData.orderStatus === 'cancelled' && order.orderStatus !== 'cancelled') {
-        await restoreStock(order.items);
-      }
-
-      // Recalculate totals on server for consistency
-      if (updateData.items) {
-        const subtotal = updateData.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-        updateData.subtotal = subtotal;
-        updateData.tax = 0;
-        updateData.totalAmount = subtotal;
-      }
-
-      const updatedOrder = await Order.findByIdAndUpdate(
-        id,
-        { $set: updateData },
-        { returnDocument: 'after' }
-      ).populate('items.menuItem').populate('table');
-=======
       const originalOrder = await Order.findById(id);
       if (!originalOrder) return res.status(404).json({ success: false, message: 'Order not found' });
 
-      // Operational Rule
       if (
         originalOrder.orderStatus === 'processing' &&
         updateData.orderStatus &&
@@ -594,10 +517,9 @@ class OrderController {
         { path: 'items.menuItem', select: 'name image' },
         { path: 'table', select: 'tableNumber' }
       ]);
->>>>>>> develop
 
       getIO().emit('ordersUpdated');
-      res.json({ success: true, data: updatedOrder });
+      res.json({ success: true, data: order });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
@@ -639,13 +561,7 @@ class OrderController {
 
       item.kitchenStatus = kitchenStatus;
       await order.save();
-<<<<<<< HEAD
-
-      // Emit socket event for real-time update
-      getIO().emit('ordersUpdated');
-=======
       await order.populate('items.menuItem', 'name image');
->>>>>>> develop
 
       getIO().emit('ordersUpdated');
       res.json({ success: true, data: order });
@@ -671,26 +587,8 @@ class OrderController {
         return res.status(403).json({ success: false, message: 'Finalized orders cannot be modified' });
       }
 
-<<<<<<< HEAD
-      order.items.push(...items.map(item => ({ ...item, kitchenStatus: 'placed' })));
-
-      // Recalculate Totals
-      const newSubtotal = order.items.reduce((acc, item) => acc + item.totalPrice, 0);
-      order.subtotal = newSubtotal;
-      order.tax = 0;
-      order.totalAmount = newSubtotal - (order.discount || 0);
-
-      // Update cash details if provided or recalculate
-      if (req.body.cashReceived !== undefined) {
-        order.cashReceived = req.body.cashReceived;
-      }
-
-      if (order.paymentMethod === 'cash') {
-        order.balance = (order.cashReceived || 0) - order.totalAmount;
-=======
       if (order.orderType === 'delivery' && order.orderSource === 'user') {
         return res.status(403).json({ success: false, message: 'User delivery orders cannot have their items modified by admin' });
->>>>>>> develop
       }
 
       const enrichedItems = await Promise.all(items.map(async item => {
@@ -705,10 +603,16 @@ class OrderController {
         };
       }));
       order.items.push(...enrichedItems);
+      
+      const newSubtotal = order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+      order.subtotal = newSubtotal;
+      order.totalAmount = newSubtotal + (order.tax || 0) - (order.discount || 0) + (order.deliveryFee || 0);
+
       await order.save();
       await handleStock(items, 'reduce');
 
       await order.populate('items.menuItem', 'name image');
+      getIO().emit('ordersUpdated');
       res.json({ success: true, data: order });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
@@ -734,20 +638,11 @@ class OrderController {
       if (item) {
         await handleStock([item], 'restore');
         order.items.pull(itemId);
-<<<<<<< HEAD
-
-        // Recalculate Totals
-        const newSubtotal = order.items.reduce((acc, item) => acc + item.totalPrice, 0);
+        
+        const newSubtotal = order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
         order.subtotal = newSubtotal;
-        order.totalAmount = newSubtotal + (order.tax || 0) - (order.discount || 0);
+        order.totalAmount = newSubtotal + (order.tax || 0) - (order.discount || 0) + (order.deliveryFee || 0);
 
-        // Recalculate Balance if it's a cash payment
-        if (order.paymentMethod === 'cash' && order.cashReceived > 0) {
-          order.balance = order.cashReceived - order.totalAmount;
-        }
-
-=======
->>>>>>> develop
         await order.save();
         await order.populate('items.menuItem', 'name image');
       }
@@ -759,18 +654,13 @@ class OrderController {
     }
   }
 
-<<<<<<< HEAD
   // --- New Table Ordering Controllers ---
 
-  /**
-   * @desc Create a new order for a table
-   */
   async createOrder(req, res) {
     try {
       const { tableId, items, orderSource, customerCount } = req.body;
       const guests = Number(customerCount) || 1;
 
-      // Check table availability
       const table = await Table.findById(tableId);
       if (!table) return res.status(404).json({ success: false, message: 'Table not found' });
 
@@ -782,12 +672,28 @@ class OrderController {
         });
       }
 
-      // Recalculate totals on server for consistency
+      const stockCheck = await checkStockAvailability(items);
+      if (!stockCheck.available) {
+        return res.status(400).json({ success: false, message: `Insufficient stock for: ${stockCheck.itemName}` });
+      }
+
       const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
       const tax = 0;
       const totalAmount = subtotal;
 
       const orderNumber = await getNextOrderNumber();
+
+      const enrichedItems = await Promise.all(items.map(async item => {
+        const menuDoc = await Menu.findById(item.menuItem);
+        const variant = menuDoc?.variants?.find(v => v.size === item.size);
+        return {
+          ...item,
+          name: menuDoc?.name || item.name,
+          image: menuDoc?.image || item.image,
+          costPrice: variant?.costPrice || 0,
+          kitchenStatus: 'placed'
+        };
+      }));
 
       const newOrder = new Order({
         orderNumber,
@@ -795,7 +701,7 @@ class OrderController {
         orderSource: orderSource || 'waiter',
         table: tableId,
         sessionId: `SESS-${Date.now()}`,
-        items,
+        items: enrichedItems,
         subtotal,
         tax,
         totalAmount,
@@ -810,23 +716,8 @@ class OrderController {
       });
 
       await newOrder.save();
+      await handleStock(items, 'reduce');
 
-      // Reduce Stock
-      for (const item of items) {
-        try {
-          const sizeDoc = await Size.findOne({ name: item.size });
-          const multiplier = sizeDoc ? sizeDoc.value : 1;
-          const reductionAmount = item.quantity * multiplier;
-
-          await Menu.findByIdAndUpdate(item.menuItem, {
-            $inc: { totalStock: -reductionAmount }
-          });
-        } catch (stockError) {
-          console.error(`Error reducing stock for item ${item.menuItem}:`, stockError);
-        }
-      }
-
-      // Update table occupancy
       const newOccupied = table.occupiedSeats + guests;
       let status = 'partial';
       if (newOccupied >= table.capacity) status = 'full';
@@ -837,6 +728,10 @@ class OrderController {
         status: status
       });
 
+      getIO().emit('newOrder', {
+        order: newOrder,
+        message: `🔔 New Table Order Received! (#${newOrder.orderNumber})`
+      });
       getIO().emit('ordersUpdated');
       res.status(201).json({ success: true, data: newOrder });
     } catch (error) {
@@ -844,14 +739,9 @@ class OrderController {
     }
   }
 
-  /**
-   * @desc Get all items ordered for a specific table
-   */
   async getOrdersByTable(req, res) {
     try {
       const { tableId } = req.params;
-
-      // Fetch all orders for this table, sorted by latest first
       const orders = await Order.find({ table: tableId })
         .populate('items.menuItem')
         .sort({ createdAt: -1 });
@@ -867,9 +757,6 @@ class OrderController {
     }
   }
 
-  /**
-   * @desc Update status of an order
-   */
   async updateOrderStatus(req, res) {
     try {
       const { orderId } = req.params;
@@ -890,9 +777,6 @@ class OrderController {
     }
   }
 
-  /**
-   * @desc Update payment status
-   */
   async updatePaymentStatus(req, res) {
     try {
       const { orderId } = req.params;
@@ -906,15 +790,13 @@ class OrderController {
 
       if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
+      getIO().emit('ordersUpdated');
       res.status(200).json({ success: true, data: order });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
   }
 
-  /**
-   * @desc Delete/Complete order and free up table
-   */
   async deleteTableOrder(req, res) {
     try {
       const { orderId } = req.params;
@@ -927,7 +809,6 @@ class OrderController {
 
       await Order.findByIdAndDelete(orderId);
 
-      // Update table occupancy by subtracting only the guests from this order
       if (tableId) {
         const table = await Table.findById(tableId);
         if (table) {
@@ -945,7 +826,11 @@ class OrderController {
 
       getIO().emit('ordersUpdated');
       res.status(200).json({ success: true, message: 'Order completed and table freed' });
-=======
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
   async updateItemQuantity(req, res) {
     try {
       const { orderId, itemId } = req.params;
@@ -982,27 +867,11 @@ class OrderController {
 
       getIO().emit('ordersUpdated');
       res.json({ success: true, data: order });
->>>>>>> develop
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
   }
 
-<<<<<<< HEAD
-  async getOrderById(req, res) {
-    try {
-      const { orderId } = req.params;
-      const order = await Order.findById(orderId)
-        .populate('items.menuItem')
-        .populate('table')
-        .populate('createdBy', 'name role');
-
-      if (!order) {
-        return res.status(404).json({ success: false, message: 'Order not found' });
-      }
-
-      res.status(200).json({ success: true, data: order });
-=======
   async updateOrderItems(req, res) {
     try {
       const { id } = req.params;
@@ -1043,16 +912,29 @@ class OrderController {
       await order.populate('items.menuItem', 'name image');
       getIO().emit('ordersUpdated');
       res.json({ success: true, data: order });
->>>>>>> develop
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }
   }
 
-<<<<<<< HEAD
-  /**
-   * @desc Get real-time stats for Waiter Dashboard
-   */
+  async getOrderById(req, res) {
+    try {
+      const { orderId } = req.params;
+      const order = await Order.findById(orderId)
+        .populate('items.menuItem')
+        .populate('table')
+        .populate('customer', 'name email phone');
+
+      if (!order) {
+        return res.status(404).json({ success: false, message: 'Order not found' });
+      }
+
+      res.status(200).json({ success: true, data: order });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
   async getWaiterStats(req, res) {
     try {
       const today = new Date();
@@ -1083,7 +965,11 @@ class OrderController {
           todaysSales: todaysSalesData.length > 0 ? todaysSalesData[0].total : 0
         }
       });
-=======
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
   async clearHistory(req, res) {
     try {
       const { orderType, startDate, endDate, ids } = req.query;
@@ -1117,7 +1003,6 @@ class OrderController {
       const result = await Order.deleteMany(query);
       getIO().emit('ordersUpdated');
       res.json({ success: true, message: `${result.deletedCount} orders cleared`, deletedCount: result.deletedCount });
->>>>>>> develop
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }

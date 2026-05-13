@@ -7,23 +7,13 @@ import {
   ChevronRight, Clock, Package, Trash2, Printer,
   CheckCircle2, Loader2, AlertTriangle, Menu
 } from 'lucide-react';
-<<<<<<< HEAD
-import axios from 'axios';
-=======
->>>>>>> develop
 import api from '../../api/axiosInstance';
 import { useTheme } from '../../context/ThemeContext';
 import { useCart } from '../../context/CartContext';
 import { showToast, showAlert } from '../../utils/sweetAlert';
 import Loader from '../../components/Loader/Loader';
 
-<<<<<<< HEAD
-// API_BASE_URL removed, using centralized api instance
 const SOCKET_URL = 'http://localhost:5000';
-=======
-const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:5000/api`;
-const SOCKET_URL = `${window.location.protocol}//${window.location.hostname}:5000`;
->>>>>>> develop
 
 const NOTIFICATION_SOUND = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
 
@@ -123,7 +113,7 @@ const KitchenDashboard = () => {
     try {
       const response = await api.get('/api/orders');
       const allOrders = response.data.data || [];
-      // Show only confirmed and ready orders in the kitchen panel
+      // Show only confirmed and processing orders in the kitchen panel
       const kitchenOrders = allOrders.filter(o =>
         o.orderStatus === 'processing'
       );
@@ -144,30 +134,27 @@ const KitchenDashboard = () => {
     } catch (error) {
       console.error('Error fetching kitchen orders:', error);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [lastFetchCount]);
 
   useEffect(() => {
-    // Initial fetch
     fetchOrders();
     const tabName = TABS.find(t => t.type === activeTab)?.name || 'Kitchen';
     document.title = `Kitchen | ${tabName}`;
 
-    // Socket Setup
     socketRef.current = io(SOCKET_URL);
     socketRef.current.on('ordersUpdated', () => {
       fetchOrders(true);
     });
 
-    // Timer for order age
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
 
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
       clearInterval(timer);
     };
-  }, []);
+  }, [activeTab, fetchOrders]);
 
   const getOrderAge = (createdAt) => {
     const diffMs = currentTime - new Date(createdAt);
@@ -182,7 +169,6 @@ const KitchenDashboard = () => {
   };
 
   const handlePrintKOT = async (order) => {
-    // Fetch settings for dynamic printing
     let currentSettings = null;
     try {
       const response = await api.get('/api/settings');
@@ -204,9 +190,8 @@ const KitchenDashboard = () => {
       </tr>
     `).join('');
 
-    // Dynamic QR Logic
     let qrCodeUrl = '';
-    const restaurantName = currentSettings?.restaurantDetails?.name || 'GUESTO RESTAURENT';
+    const restaurantName = currentSettings?.restaurantDetails?.name || 'GUESTO RESTAURANT';
     const showQR = currentSettings?.printingSettings?.showKOTQRCode && (order.orderType === 'delivery' || order.orderSource === 'online' || order.orderType === 'online');
 
     if (showQR && currentSettings.printingSettings.kotQRCodeImage) {
@@ -293,7 +278,7 @@ const KitchenDashboard = () => {
     const result = await showAlert({
       icon: 'warning',
       title: 'Remove Order?',
-      text: `Remove order ${orderNumber} from kitchen view? This will mark it as completed.`,
+      text: `Remove order ${orderNumber} from kitchen view? This will mark it as delivered.`,
       showCancelButton: true,
       confirmButtonColor: '#DC2626',
       cancelButtonColor: '#9CA3AF',
@@ -304,12 +289,8 @@ const KitchenDashboard = () => {
     if (!result.isConfirmed) return;
 
     try {
-<<<<<<< HEAD
-      await api.patch(`/api/orders/${orderId}/status`, { status: 'completed' });
-=======
       await api.patch(`/api/orders/${orderId}/status`, { orderStatus: 'delivered' });
->>>>>>> develop
-      showToast('success', `Order ${orderNumber} removed from kitchen`);
+      showToast('success', `Order ${orderNumber} marked as delivered`);
       fetchOrders(true);
     } catch (error) {
       showToast('error', 'Failed to remove order');
@@ -330,26 +311,19 @@ const KitchenDashboard = () => {
     return o.orderType === activeTab;
   });
 
-  const pendingCount = orders.filter(o =>
-    o.items?.some(i => i.kitchenStatus === 'placed' || i.kitchenStatus === 'preparing')
-  ).length;
-
   return (
     <div className="flex h-screen bg-background text-text-primary overflow-hidden transition-colors duration-300">
 
-      {/* Mobile overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 bg-background-card border-r border-border-light flex flex-col transition-all duration-300 ease-in-out
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         ${isSidebarCollapsed ? 'lg:w-[5.5rem]' : 'lg:w-64'}
         w-64
       `}>
-        {/* Collapse toggle */}
         <button
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           className={`hidden lg:flex absolute -right-3 top-10 p-1.5 bg-primary text-white rounded-full shadow-lg border-2 border-background-card z-20 transition-transform duration-300 ${!isSidebarCollapsed ? 'rotate-180' : ''}`}
@@ -358,7 +332,6 @@ const KitchenDashboard = () => {
         </button>
 
         <div className="flex-1 flex flex-col overflow-x-hidden no-scrollbar">
-          {/* Logo */}
           <div className="p-6 border-b border-border-light flex items-center justify-center relative">
             <img
               src={
@@ -377,7 +350,6 @@ const KitchenDashboard = () => {
             </button>
           </div>
 
-          {/* Role Badge */}
           {(!isSidebarCollapsed || isMobileMenuOpen) && (
             <div className="px-4 pt-4">
               <div className="flex items-center space-x-2 p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
@@ -390,7 +362,6 @@ const KitchenDashboard = () => {
             </div>
           )}
 
-          {/* Nav */}
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
             {TABS.map((tab) => {
               const count = orders.filter(o => {
@@ -430,7 +401,6 @@ const KitchenDashboard = () => {
             })}
           </nav>
 
-          {/* Logout */}
           <div className="p-4 border-t border-border-light">
             <button
               onClick={handleLogout}
@@ -447,13 +417,10 @@ const KitchenDashboard = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'lg:ml-[5.5rem]' : 'lg:ml-64'}`}>
 
-        {/* Header */}
         <header className="h-20 bg-background-card border-b border-border-main flex items-center justify-between px-4 lg:px-8 shrink-0">
           <div className="flex items-center space-x-4">
-            {/* Mobile menu toggle */}
             <button
               onClick={() => setIsMobileMenuOpen(true)}
               className="lg:hidden p-2 text-text-secondary hover:bg-background-muted rounded-lg"
@@ -470,7 +437,6 @@ const KitchenDashboard = () => {
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
-            {/* Theme toggle */}
             <button
               onClick={toggleTheme}
               className="p-2 text-text-secondary hover:text-primary hover:bg-background-muted rounded-lg transition-all"
@@ -479,7 +445,6 @@ const KitchenDashboard = () => {
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            {/* Refresh */}
             <button
               onClick={() => fetchOrders()}
               className="p-2 text-text-secondary hover:text-primary hover:bg-background-muted rounded-lg transition-all group"
@@ -488,7 +453,6 @@ const KitchenDashboard = () => {
               <RefreshCw size={20} className={`${isLoading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
             </button>
 
-            {/* Notifications */}
             <div className="relative">
               <button
                 onClick={() => setShowNotifPanel(!showNotifPanel)}
@@ -502,7 +466,6 @@ const KitchenDashboard = () => {
                 )}
               </button>
 
-              {/* Notification Panel */}
               {showNotifPanel && (
                 <div className="absolute right-0 top-12 w-80 bg-background-card border border-border-light rounded-2xl shadow-2xl z-50 overflow-hidden animate-in slide-in-from-top-2 duration-200">
                   <div className="flex items-center justify-between p-4 border-b border-border-light">
@@ -528,7 +491,6 @@ const KitchenDashboard = () => {
               )}
             </div>
 
-            {/* Staff info */}
             <div className="flex items-center space-x-3 border-l pl-4 sm:pl-6 border-border-light">
               <div className="hidden sm:block text-right">
                 <p className="text-sm font-bold text-text-primary">{staff.name || 'User'}</p>
@@ -543,7 +505,6 @@ const KitchenDashboard = () => {
           </div>
         </header>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-8">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-[60vh] space-y-6">
@@ -570,11 +531,10 @@ const KitchenDashboard = () => {
                   <div
                     key={order._id}
                     className={`bg-background-card rounded-[2.5rem] border shadow-sm flex flex-col hover:shadow-xl transition-all duration-300 relative
-                      ${allReady ? 'border-status-on/30' : 'border-border-light hover:border-primary/20'}
+                      ${allReady ? 'border-status-available/30' : 'border-border-light hover:border-primary/20'}
                     `}
                   >
-                    {/* Order Header */}
-                    <div className={`p-5 border-b border-border-light flex items-center justify-between rounded-t-[2.5rem] ${allReady ? 'bg-status-on/5' : 'bg-background-muted/30'}`}>
+                    <div className={`p-5 border-b border-border-light flex items-center justify-between rounded-t-[2.5rem] ${allReady ? 'bg-status-available/5' : 'bg-background-muted/30'}`}>
                       <div>
                         <h3 className="text-base font-black text-text-primary">{order.orderNumber}</h3>
                         <div className="flex items-center space-x-1.5 mt-1">
@@ -597,7 +557,7 @@ const KitchenDashboard = () => {
                           <Printer size={16} />
                         </button>
                         {allReady && (
-                          <span className="flex items-center space-x-1 px-3 py-1 bg-status-on/10 text-status-available rounded-full border border-status-on/20 text-[9px] font-black uppercase tracking-widest">
+                          <span className="flex items-center space-x-1 px-3 py-1 bg-status-available/10 text-status-available rounded-full border border-status-available/20 text-[9px] font-black uppercase tracking-widest">
                             <CheckCircle2 size={11} />
                             <span>All Ready</span>
                           </span>
@@ -612,7 +572,6 @@ const KitchenDashboard = () => {
                       </div>
                     </div>
 
-                    {/* Customer info if exists */}
                     {(order.customerDetails?.name || order.address?.recipientName || order.tableNumber) && (
                       <div className="px-5 pt-3 pb-0 flex items-center space-x-3 text-xs text-text-secondary font-bold">
                         {(order.customerDetails?.name || order.address?.recipientName) && (
@@ -625,7 +584,6 @@ const KitchenDashboard = () => {
                       </div>
                     )}
 
-                    {/* Items */}
                     <div className="flex-1 p-5 space-y-3">
                       {order.items?.map((item) => {
                         const status = item.kitchenStatus || 'placed';
@@ -634,7 +592,7 @@ const KitchenDashboard = () => {
                             <div className="flex items-center space-x-3 min-w-0">
                               <div className="w-14 h-14 bg-background-card rounded-xl flex items-center justify-center border border-border-light shrink-0 overflow-hidden">
                                 {item.image || (item.menuItem && typeof item.menuItem === 'object' ? item.menuItem.image : '') ? (
-                                  <img src={item.image || item.menuItem.image} alt={item.name || item.menuItem.name} className="w-full h-full object-cover" />
+                                  <img src={item.image || (item.menuItem && typeof item.menuItem === 'object' ? item.menuItem.image : '')} alt={item.name || (item.menuItem && typeof item.menuItem === 'object' ? item.menuItem.name : 'Menu Item')} className="w-full h-full object-cover" />
                                 ) : (
                                   <Package size={20} className="text-primary/40" />
                                 )}
@@ -664,14 +622,13 @@ const KitchenDashboard = () => {
                       })}
                     </div>
 
-                    {/* Footer: Remove button when all ready */}
                     <div className={`px-5 pb-5 ${allReady ? 'block' : 'hidden'}`}>
                       <button
                         onClick={() => handleRemoveOrder(order._id, order.orderNumber)}
-                        className="w-full flex items-center justify-center space-x-2 py-3 bg-status-off/10 hover:bg-status-off/20 text-status-unavailable border border-status-off/20 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all hover:scale-[1.01] active:scale-95"
+                        className="w-full flex items-center justify-center space-x-2 py-3 bg-status-unavailable/10 hover:bg-status-unavailable/20 text-status-unavailable border border-status-unavailable/20 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all hover:scale-[1.01] active:scale-95"
                       >
                         <Trash2 size={14} />
-                        <span>Remove Order from Kitchen</span>
+                        <span>Mark as Delivered</span>
                       </button>
                     </div>
                   </div>

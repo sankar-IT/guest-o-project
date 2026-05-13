@@ -4,39 +4,32 @@ import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-<<<<<<< HEAD
-router.post('/counter', orderController.createCounterOrder);
-router.post('/', orderController.createOrder); // New table order
-router.get('/', orderController.getOrders);
-router.get('/table/:tableId', orderController.getOrdersByTable); // New
-router.patch('/:id', orderController.updateOrder);
-router.patch('/:orderId/status', orderController.updateOrderStatus);
-router.patch('/:orderId/payment-status', orderController.updatePaymentStatus); // New
-=======
 // User Routes
-router.post('/', protect, orderController.placeOrder);
+router.post('/place', protect, orderController.placeOrder);
 router.get('/my-orders', protect, orderController.getMyOrders);
 router.put('/:id/cancel', protect, orderController.cancelOrder);
 
-// Shared / Admin Routes
+// Admin & Waiter Routes
 router.get('/', orderController.getOrders);
-router.put('/:id/status', orderController.updateOrderStatus);
-router.patch('/:id/status', orderController.updateOrderStatus);
-
-// Counter / Item Management (from develop)
+router.post('/', orderController.createOrder); // New table order
 router.post('/counter', orderController.createCounterOrder);
->>>>>>> develop
+router.get('/table/:tableId', orderController.getOrdersByTable);
+router.get('/waiter/stats', orderController.getWaiterStats);
+router.get('/:orderId', orderController.getOrderById);
+
+router.patch('/:id', orderController.updateOrder);
+router.patch('/:orderId/status', orderController.updateOrderStatus);
+router.patch('/:orderId/payment-status', orderController.updatePaymentStatus);
+
+// Item Management
 router.patch('/:id/add-items', orderController.addItems);
 router.patch('/:id/items', orderController.updateOrderItems);
 router.patch('/:orderId/items/:itemId/remove', orderController.removeItem);
 router.patch('/:orderId/items/:itemId/status', orderController.updateItemStatus);
-<<<<<<< HEAD
-router.get('/waiter/stats', orderController.getWaiterStats);
-router.get('/:orderId', orderController.getOrderById);
-router.delete('/:orderId', orderController.deleteTableOrder); // New
-=======
 router.patch('/:orderId/items/:itemId/quantity', orderController.updateItemQuantity);
+
+// Cleanup & Finalization
 router.delete('/clear-history', orderController.clearHistory);
->>>>>>> develop
+router.delete('/:orderId', orderController.deleteTableOrder);
 
 export default router;

@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import Sidebar from '../../components/Sidebar/Sidebar';
 import {
   ArrowLeft,
   Plus,
@@ -13,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import api from '../../api/axiosInstance';
+import { useCart } from '../../context/CartContext';
 import './OrderWorkspace.css';
 
 const OrderWorkspace = () => {
@@ -21,15 +21,19 @@ const OrderWorkspace = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const tableNumberFromState = location.state?.tableNumber;
   const existingOrder = location.state?.existingOrder;
   const isEditing = location.state?.isEditing;
 
-  const customerCount = existingOrder?.customerDetails?.numberOfGuests || searchParams.get('customers') || '1';
-  const orderNumber = existingOrder?.orderNumber || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+  const { getCartForTable, updateTableCart, addToCart: addToCartContext, updateQuantity: updateQuantityContext } = useCart();
+  const tableCartData = getCartForTable(tableId);
+  const cart = tableCartData.cart;
+
+  const customerCount = existingOrder?.customerDetails?.numberOfGuests || tableCartData.customerCount || searchParams.get('customers') || '1';
+  const orderNumber = existingOrder?.orderNumber || tableCartData.orderNumber || `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const [cart, setCart] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,10 +41,11 @@ const OrderWorkspace = () => {
   const [initialCartJson, setInitialCartJson] = useState('[]');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedSizes, setSelectedSizes] = useState({});
+  const [tableData, setTableData] = useState(null);
 
   useEffect(() => {
     if (isEditing && existingOrder) {
-      // Merge identical items from the existing order into the cart state
+      // Merge identical items from the existing order into a reference list
       const mergedItems = existingOrder.items.reduce((acc, item) => {
         const menuItemId = item.menuItem?._id || item.menuItem;
         const key = `${menuItemId}-${item.size}`;
@@ -63,11 +68,28 @@ const OrderWorkspace = () => {
         return acc;
       }, []);
 
-      console.log('DEBUG: Loaded and merged items into cart:', mergedItems);
-      setCart(mergedItems);
+      // Always set initialCartJson for change detection logic
       setInitialCartJson(JSON.stringify(mergedItems));
+
+      // Only initialize the cart state if we're not already editing this order
+      // or if the cart is currently empty (first load of the edit session)
+      if (tableCartData.orderNumber !== existingOrder.orderNumber || tableCartData.cart.length === 0) {
+        console.log('DEBUG: Initializing edit cart for order:', existingOrder.orderNumber);
+        updateTableCart(tableId, { 
+          cart: mergedItems, 
+          customerCount: existingOrder.customerDetails?.numberOfGuests || tableCartData.customerCount,
+          orderNumber: existingOrder.orderNumber
+        });
+      }
+    } else if (!tableCartData.orderNumber) {
+      // Initial setup for new order - generate order number if not exists
+      console.log('DEBUG: Initializing new order');
+      updateTableCart(tableId, { 
+        customerCount: searchParams.get('customers') || tableCartData.customerCount || '1',
+        orderNumber: `ORD-${Math.floor(1000 + Math.random() * 9000)}`
+      });
     }
-  }, [isEditing, existingOrder]);
+  }, [isEditing, existingOrder, tableId, tableCartData.orderNumber, tableCartData.cart.length]);
 
   useEffect(() => {
     if (isEditing) {
@@ -86,9 +108,18 @@ const OrderWorkspace = () => {
           api.get('/api/categories')
         ]);
         const items = menuRes.data.data || [];
-        console.log('Variants data from backend:', items.map(i => ({ name: i.name, variants: i.variants })));
         setMenuItems(items);
         setCategories(catRes.data.data || []);
+        
+        // Fetch table details separately to avoid blocking menu if it fails
+        try {
+          const tableRes = await api.get(`/api/tables/${tableId}`);
+          if (tableRes.data.success) {
+            setTableData(tableRes.data.data.table);
+          }
+        } catch (tableErr) {
+          console.error('Error fetching table details:', tableErr);
+        }
 
         // Initialize default sizes
         const defaults = {};
@@ -139,68 +170,46 @@ const OrderWorkspace = () => {
     const price = item.hasOffer ? item.offerPrice : (selectedVariant?.price || 0);
     const cartItemId = `${item._id}-${sizeName}`;
 
-    console.log('Adding to cart (merging enabled):', { product: item.name, size: sizeName, price });
-
-    const existing = cart.find(i => i.id === cartItemId);
-    if (existing) {
-      setCart(cart.map(i => i.id === cartItemId ? {
-        ...i,
-        quantity: i.quantity + 1,
-        totalPrice: (i.quantity + 1) * price
-      } : i));
-    } else {
-      setCart([...cart, {
-        id: cartItemId,
-        menuItem: item._id,
-        name: item.name,
-        price: price, // For compatibility
-        unitPrice: price,
-        size: sizeName,
-        quantity: 1,
-        totalPrice: price,
-        image: item.image
-      }]);
-    }
+    addToCartContext(tableId, {
+      id: cartItemId,
+      menuItem: item._id,
+      name: item.name,
+      price: price,
+      unitPrice: price,
+      size: sizeName,
+      quantity: 1,
+      totalPrice: price,
+      image: item.image
+    });
   };
 
   const updateCartQty = (id, delta) => {
-    setCart(cart.map(item =>
-      item.id === id ? {
-        ...item,
-        quantity: Math.max(0, item.quantity + delta),
-        totalPrice: Math.max(0, item.quantity + delta) * item.price
-      } : item
-    ).filter(item => item.quantity > 0));
+    updateQuantityContext(tableId, id, delta);
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   if (isLoading) {
     return (
-      <div className="dashboard-layout">
-        <Sidebar />
-        <main className="dashboard-main flex items-center justify-center">
-          <Loader2 className="animate-spin text-primary" size={48} />
-        </main>
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="animate-spin text-primary" size={48} />
       </div>
     );
   }
 
   return (
-    <div className="dashboard-layout">
-      <Sidebar />
-      <main className="dashboard-main order-workspace menu-page">
+    <div className="order-workspace menu-page">
         <div className="workspace-grid">
           {/* Menu Section */}
           <div className="menu-content-section">
             <div className="menu-sticky-header">
               <header className="workspace-header">
                 <div className="header-left">
-                  <button className="back-btn" onClick={() => navigate(`/staff/detail/${tableId}`)}>
+                  <button className="back-btn" onClick={() => navigate(`/waiter/tables/${tableId}`)}>
                     <ArrowLeft size={20} />
                   </button>
                   <div className="header-info">
-                    <h1>Table {tableId || '05'}</h1>
+                    <h1>Table {tableData?.tableNumber || tableNumberFromState || '00'}</h1>
                     <div className="table-meta">
                       <span className="order-id-tag">{orderNumber}</span>
                       <span className="divider"></span>
@@ -260,66 +269,76 @@ const OrderWorkspace = () => {
             </div>
 
             <section className="menu-grid">
-              {filteredItems.map(item => {
-                const selectedVariant = selectedSizes[item._id] || (item.variants && item.variants[0]);
-                const displayPrice = item.hasOffer ? item.offerPrice : (selectedVariant?.price || 0);
-                const isOutOfStock = item.totalStock <= 0;
+              {filteredItems.length === 0 ? (
+                <div className="empty-menu-state">
+                  <Loader2 className="empty-icon" size={48} />
+                  <h3>No menu items found</h3>
+                  <p>Try adjusting your search or category filters.</p>
+                </div>
+              ) : (
+                filteredItems.map(item => {
+                  const selectedVariant = selectedSizes[item._id] || (item.variants && item.variants[0]);
+                  const displayPrice = item.hasOffer ? item.offerPrice : (selectedVariant?.price || 0);
+                  const isOutOfStock = item.totalStock <= 0;
 
-                return (
-                  <div key={item._id} className={`menu-card dinesync-card ${isOutOfStock ? 'out-of-stock' : ''}`}>
-                    <div className="item-image-wrapper">
-                      <img
-                        src={item.image ? (item.image.startsWith('http') ? item.image : `http://localhost:5000${item.image}`) : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format'}
-                        alt={item.name}
-                      />
-                      <span className={`type-tag ${item.foodType.toLowerCase()}`}>{item.foodType}</span>
-                      {isOutOfStock && <div className="out-of-stock-overlay">Out of Stock</div>}
-                    </div>
-                    <div className="item-details">
-                      <div className="item-header">
-                        <div className="item-title-desc">
-                          <h3>{item.name}</h3>
-                          <p className="item-description-small">{item.description}</p>
-                        </div>
-                        <div className="price-badge-animated">
-                          <span className="price">₹{displayPrice}</span>
-                        </div>
+                  return (
+                    <div key={item._id} className={`menu-card dinesync-card ${isOutOfStock ? 'out-of-stock' : ''}`}>
+                      <div className="item-image-wrapper">
+                        <img
+                          src={item.image ? (item.image.startsWith('http') ? item.image : `http://localhost:5000${item.image}`) : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format'}
+                          alt={item.name}
+                          loading="lazy"
+                        />
+                        <span className={`type-tag ${item.foodType.toLowerCase()}`}>{item.foodType}</span>
+                        {isOutOfStock && <div className="out-of-stock-overlay">Out of Stock</div>}
                       </div>
-
-                      {item.variants && item.variants.length > 0 && (
-                        <div className="item-variants-selector">
-                          <p className="selector-label">Select Size:</p>
-                          <div className="variant-chips-group">
-                            {item.variants.map((v, idx) => {
-                              const isSelected = selectedVariant && selectedVariant.size === v.size;
-                              return (
-                                <button
-                                  key={idx}
-                                  className={`variant-chip-btn ${isSelected ? 'active' : ''}`}
-                                  onClick={() => handleSizeSelect(item._id, v)}
-                                  disabled={isOutOfStock}
-                                >
-                                  {v.size}
-                                </button>
-                              );
-                            })}
+                      <div className="item-details">
+                        <div className="item-header">
+                          <div className="item-title-desc">
+                            <h3>{item.name}</h3>
+                            <p className="item-description-small">{item.description}</p>
+                          </div>
+                          <div className="price-badge-animated">
+                            <span className="price">₹{displayPrice}</span>
                           </div>
                         </div>
-                      )}
 
-                      <button
-                        className="add-to-cart-btn"
-                        onClick={() => addToCart(item)}
-                        disabled={isOutOfStock}
-                      >
-                        <Plus size={18} />
-                        {isOutOfStock ? 'Sold Out' : 'Add to Cart'}
-                      </button>
+                        {item.variants && item.variants.length > 0 && (
+                          <div className="item-variants-selector">
+                            <p className="selector-label">Select Size:</p>
+                            <div className="variant-chips-group">
+                              {item.variants.map((v, idx) => {
+                                const isSelected = selectedVariant && selectedVariant.size === v.size;
+                                return (
+                                  <button
+                                    key={idx}
+                                    className={`variant-chip-btn ${isSelected ? 'active' : ''}`}
+                                    onClick={() => handleSizeSelect(item._id, v)}
+                                    disabled={isOutOfStock}
+                                  >
+                                    {v.size}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        <button
+                          className="add-to-cart-btn-modern"
+                          onClick={() => addToCart(item)}
+                          disabled={isOutOfStock}
+                        >
+                          <Plus size={18} />
+                          {isOutOfStock ? 'Sold Out' : 'Add to Cart'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </section>
+
           </div>
 
           {/* Cart Sidebar Section */}
@@ -404,7 +423,7 @@ const OrderWorkspace = () => {
                 {isEditing && (
                   <button
                     className="dinesync-btn dinesync-btn-outline cancel-edit-btn"
-                    onClick={() => navigate(`/staff/order-details/${tableId}/${existingOrder?._id}`)}
+                    onClick={() => navigate(`/waiter/order-details/${tableId}/${existingOrder?._id}`)}
                   >
                     Cancel Edit
                   </button>
@@ -413,13 +432,14 @@ const OrderWorkspace = () => {
                   className="dinesync-btn dinesync-btn-primary confirm-order-btn"
                   disabled={!hasChanges}
                   onClick={() => {
-                    navigate(`/staff/order-review/${tableId}`, {
+                    navigate(`/waiter/order-review/${tableId}`, {
                       state: {
                         cart,
                         customerCount,
                         orderNumber,
                         isEditing,
-                        existingOrderId: existingOrder?._id
+                        existingOrderId: existingOrder?._id,
+                        tableNumber: tableData?.tableNumber || tableNumberFromState
                       }
                     });
                   }}
@@ -431,7 +451,6 @@ const OrderWorkspace = () => {
             </div>
           </aside>
         </div>
-      </main>
     </div>
   );
 };

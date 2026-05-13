@@ -13,6 +13,7 @@ router.patch('/:orderId/payment-status', orderController.updatePaymentStatus); /
 router.patch('/:id/add-items', orderController.addItems);
 router.patch('/:orderId/items/:itemId/remove', orderController.removeItem);
 router.patch('/:orderId/items/:itemId/status', orderController.updateItemStatus);
+router.get('/waiter/stats', orderController.getWaiterStats);
 router.get('/:orderId', orderController.getOrderById);
 router.delete('/:orderId', orderController.deleteTableOrder); // New
 

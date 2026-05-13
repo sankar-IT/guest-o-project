@@ -155,6 +155,17 @@
   flex-direction: column;
   gap: 1.5rem;
   background: var(--color-background-card);
+  transition: all 0.2s ease;
+}
+
+.order-card-modern.clickable-card {
+  cursor: pointer;
+}
+
+.order-card-modern.clickable-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  border-color: var(--color-primary);
 }
 
 .order-card-header {

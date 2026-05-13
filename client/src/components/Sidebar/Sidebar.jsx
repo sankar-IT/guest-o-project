@@ -17,10 +17,11 @@ import './Sidebar.css';
 const Sidebar = ({ isOpen, onClose }) => {
   const { theme, toggleTheme } = useTheme();
   const menuItems = [
-    { icon: <LayoutDashboard size={20} />, label: 'Table Dashboard', path: '/staff/tables' },
+    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/waiter/dashboard' },
+    { icon: <LayoutDashboard size={20} />, label: 'Tables', path: '/waiter/tables' },
+    { icon: <UtensilsCrossed size={20} />, label: 'Orders', path: '/waiter/orders' },
+    { icon: <UtensilsCrossed size={20} />, label: 'Menu', path: '/waiter/menu' },
     { icon: <ChefHat size={20} />, label: 'Kitchen Tracker', path: '/kitchen/tracker' },
-    { icon: <UtensilsCrossed size={20} />, label: 'Menu', path: '/menu' },
-    { icon: <User size={20} />, label: 'Profile', path: '/profile' },
   ];
 
   return (

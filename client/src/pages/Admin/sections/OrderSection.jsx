@@ -405,7 +405,7 @@ const OrderSection = () => {
     const matchesSearch = (o.orderNumber || '').toLowerCase().includes(searchLower) ||
       (o.customerDetails?.phone || '').includes(searchTerm) ||
       (o.customerDetails?.name || '').toLowerCase().includes(searchLower);
-    const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || o.orderStatus === statusFilter;
     const matchesPayment = paymentFilter === 'all' || o.paymentStatus === paymentFilter;
     const matchesType = o.orderType === activeTab;
     return matchesSearch && matchesStatus && matchesPayment && matchesType;
@@ -497,9 +497,10 @@ const OrderSection = () => {
                   className="bg-background-card text-text-primary border border-border-main rounded-lg px-3 py-1.5 text-xs outline-none"
                 >
                   <option value="all">All Orders</option>
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="completed">Completed</option>
+                  <option value="placed">Placed</option>
+                  <option value="processing">Processing</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
                 </select>
                 <select
                   value={paymentFilter}
@@ -596,12 +597,11 @@ const OrderSection = () => {
                       </td>
                       <td className="px-6 py-4 font-black text-text-primary">₹{order.totalAmount}</td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${order.status === 'completed' ? 'bg-primary/10 text-primary border-primary/20' :
-                          order.status === 'confirmed' ? 'bg-status-on/10 text-status-available border-status-on/20' :
-                            order.status === 'cancelled' ? 'bg-status-off/10 text-status-unavailable border-status-off/20' :
-                              'bg-background-muted text-text-muted border-border-light'
-                          }`}>
-                          {order.status}
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${order.orderStatus === 'delivered' ? 'bg-primary/10 text-primary border-primary/20' :
+                          order.orderStatus === 'processing' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                          order.orderStatus === 'cancelled' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                          'bg-status-on/10 text-status-available border-status-on/20'}`}>
+                          {order.orderStatus}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-center">

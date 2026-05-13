@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Sidebar from '../../components/Sidebar/Sidebar';
-import { Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Menu } from 'lucide-react';
 import './KitchenStatusTracker.css';
 
 const KitchenStatusTracker = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const orders = [
     { id: 'ORD-101', table: '02', items: ['Grilled Salmon', 'Garden Salad'], time: '12m ago', status: 'In Progress', priority: 'High' },
     { id: 'ORD-102', table: '12', items: ['Beef Burger', 'Truffle Fries', 'Coke'], time: '8m ago', status: 'Pending', priority: 'Normal' },
@@ -22,11 +23,16 @@ const KitchenStatusTracker = () => {
 
   return (
     <div className="dashboard-layout">
-      <Sidebar />
-      <main className="dashboard-main">
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <div className="dashboard-main-container kitchen-tracker-page">
         <header className="dashboard-header">
           <div className="header-left">
-            <h1>Kitchen Status Tracker</h1>
+            <div className="title-row">
+              <button className="mobile-menu-btn" onClick={() => setIsSidebarOpen(true)}>
+                <Menu size={24} />
+              </button>
+              <h1>Kitchen Status Tracker</h1>
+            </div>
             <p className="subtitle">Live order monitoring and priority management</p>
           </div>
           <div className="header-stats">
@@ -109,7 +115,7 @@ const KitchenStatusTracker = () => {
             </div>
           </div>
         </section>
-      </main>
+      </div>
     </div>
   );
 };

@@ -7,6 +7,7 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 // Preserve admin-login for the dashboard
 router.post('/admin-login', authController.adminLogin);
+router.post('/staff-login', authController.staffLogin);
 
 router.post('/google', authController.googleLogin);
 router.post('/send-otp', authController.sendOTP);

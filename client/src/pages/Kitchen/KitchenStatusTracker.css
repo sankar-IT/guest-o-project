@@ -156,12 +156,6 @@
 }
 
 @media (max-width: 768px) {
-  .dashboard-main {
-    margin-left: 0;
-    padding: 1rem;
-    padding-bottom: 5rem;
-  }
-
   .dashboard-header {
     flex-direction: column;
     gap: 1.5rem;

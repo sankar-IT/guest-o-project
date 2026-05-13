@@ -56,6 +56,7 @@ const orderSchema = new mongoose.Schema({
     phone: String,
     address: String,
     location: mongoose.Schema.Types.Mixed,
+    numberOfGuests: { type: Number, default: 1 },
     remarks: String
   },
   address: {

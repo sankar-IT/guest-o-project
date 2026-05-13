@@ -6,11 +6,7 @@ const router = express.Router();
 router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.post('/admin-login', authController.adminLogin);
-<<<<<<< HEAD
 router.post('/staff-login', authController.staffLogin);
-
-=======
->>>>>>> develop
 router.post('/google', authController.googleLogin);
 router.post('/send-otp', authController.sendOTP);
 router.post('/verify-otp', authController.registerWithOTP);

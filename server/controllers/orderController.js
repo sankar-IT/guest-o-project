@@ -3,7 +3,6 @@ import Cart from '../models/cartSchema.js';
 import User from '../models/userSchema.js';
 import Counter from '../models/counterSchema.js';
 import Menu from '../models/menuSchema.js';
-import Size from '../models/sizeSchema.js';
 import Table from '../models/tableSchema.js';
 import Settings from '../models/settingsSchema.js';
 import { getIO } from '../socket.js';

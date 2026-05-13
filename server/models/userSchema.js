@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 const userSchema = new mongoose.Schema({
 
@@ -9,10 +9,15 @@ const userSchema = new mongoose.Schema({
     trim: true 
   },
 
+  avatar: {
+    type: String,
+    default: ""
+  },
+
   email: {
     type: String,
-    required: [true, "Email is required"],
     unique: true,
+    sparse: true,
     lowercase: true,
     trim: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, "Please provide a valid email"]
@@ -33,57 +38,27 @@ const userSchema = new mongoose.Schema({
 
   phone: { 
     type: String, 
+    unique: true,
+    sparse: true,
     trim: true 
   },
 
-  address: {
+  addresses: [{
+    name: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    address: { type: String, trim: true },
+    landmark: { type: String, trim: true },
+    location: { type: String, trim: true },
     type: {
       type: String,
       enum: ["home", "office"],
       default: "home"
     },
-
-    street: {
-      type: String,
-      trim: true
-    },
-
     isDefault: {
       type: Boolean,
       default: false
-    },
-  
-    area: {
-      type: String,
-      trim: true
-    },
-
-    city: {
-      type: String,
-      trim: true
-    },
-
-    state: {
-      type: String,
-      trim: true
-    },
-
-    pincode: {
-      type: String,
-      trim: true
-    },
-
-    country: {
-      type: String,
-      default: "India"
-    },
-
-
-    location: {
-      lat: Number,
-      lng: Number
     }
-  },
+  }],
 
   isActive: { 
     type: Boolean, 
@@ -92,7 +67,17 @@ const userSchema = new mongoose.Schema({
 
   lastLogin: {
     type: Date
-  }
+  },
+  walletBalance: {
+    type: Number,
+    default: 0
+  },
+  walletTransactions: [{
+    amount: Number,
+    type: { type: String, enum: ["credit", "debit"] },
+    description: String,
+    date: { type: Date, default: Date.now }
+  }]
 
 }, { timestamps: true });
 

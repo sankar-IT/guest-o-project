@@ -4,20 +4,25 @@ const BASE_URL = 'http://localhost:5000';
 
 
 
-const noCacheHeaders = {
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0',
-};
-
 const api = axios.create({
   baseURL: BASE_URL,
-  headers: noCacheHeaders,
 });
 
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const path = window.location.pathname;
+  let token;
+
+  // Portal-aware token selection
+  if (path.startsWith('/admin')) {
+    token = localStorage.getItem('admin_token');
+  } else if (path.startsWith('/kitchen') || path.startsWith('/waiter') || path.startsWith('/staff')) {
+    token = localStorage.getItem('staff_token');
+  } else {
+    // Fallback for other paths (like home or general user pages)
+    token = localStorage.getItem('token') || localStorage.getItem('admin_token') || localStorage.getItem('staff_token');
+  }
+
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`;
   }
@@ -29,10 +34,27 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      const path = window.location.pathname;
+      const isLoginRequest = error.config.url.includes('/api/auth/login');
+      
+      // Don't redirect if we're already on a login page or it's a login attempt
+      if (isLoginRequest || path === '/login' || path === '/admin/login' || path === '/staff/login') {
+        return Promise.reject(error);
+      }
 
-      window.location.replace('/login');
+      if (path.startsWith('/admin')) {
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_user');
+        window.location.replace('/admin/login');
+      } else if (path.startsWith('/kitchen') || path.startsWith('/waiter') || path.startsWith('/staff')) {
+        localStorage.removeItem('staff_token');
+        localStorage.removeItem('staff_user');
+        window.location.replace('/staff/login');
+      } else {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.replace('/login');
+      }
     }
     return Promise.reject(error);
   }

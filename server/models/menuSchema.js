@@ -12,7 +12,7 @@ const menuSchema = new mongoose.Schema({
 
   category: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Category",  
+    ref: "Category",
     required: true
   },
 
@@ -22,27 +22,49 @@ const menuSchema = new mongoose.Schema({
   },
 
   offerPrice: {
-  type: Number,
-  min: 0
-},
+    type: Number,
+    min: 0
+  },
 
-hasOffer: {
-  type: Boolean,
-  default: false
-},
+  hasOffer: {
+    type: Boolean,
+    default: false
+  },
 
   variants: [
     {
       size: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Size",
-        required: true
+        type: String,
+        required: true,
+        trim: true
       },
       price: {
         type: Number,
         required: true,
         min: 0
-      }
+      },
+      costPrice: {
+        type: Number,
+        default: 0,
+        min: 0
+      },
+      stockValue: {
+        type: Number,
+        default: 1
+      },
+      includedItems: [
+        {
+          menuItem: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Menu"
+          },
+          name: String, // Optional: store name for easy display if needed
+          quantity: {
+            type: Number,
+            default: 1
+          }
+        }
+      ]
     }
   ],
 

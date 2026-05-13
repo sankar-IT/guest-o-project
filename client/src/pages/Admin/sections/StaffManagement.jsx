@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, User, Mail, Phone, Shield, Power, Loader2, ArrowUpDown, XCircle } from 'lucide-react';
-import axios from 'axios';
+import { Plus, Edit2, Trash2, Search, User, Mail, Phone, Shield, Power, Loader2, ArrowUpDown, XCircle, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import api from '../../../api/axiosInstance';
 import { showAlert, showToast, showDeleteConfirmation } from '../../../utils/sweetAlert';
+import Loader from '../../../components/Loader/Loader';
+import Pagination from '../../../components/Pagination/Pagination';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+
 
 const StaffManagement = () => {
   const [staffList, setStaffList] = useState([]);
@@ -13,6 +15,8 @@ const StaffManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const [currentStaff, setCurrentStaff] = useState({
     name: '',
@@ -28,16 +32,16 @@ const StaffManagement = () => {
     fetchStaff();
   }, []);
 
-  const fetchStaff = async () => {
-    setIsLoading(true);
+  const fetchStaff = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/staff`);
+      const response = await api.get('/api/staff');
       setStaffList(response.data.data);
     } catch (error) {
       console.error('Error fetching staff:', error);
       showToast('error', 'Failed to fetch staff list');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -75,13 +79,13 @@ const StaffManagement = () => {
         const updateData = { ...currentStaff };
         if (!updateData.password) delete updateData.password;
         
-        await axios.put(`${API_BASE_URL}/staff/${currentStaff._id}`, updateData);
+        await api.put(`/api/staff/${currentStaff._id}`, updateData);
         showToast('success', 'Staff updated successfully');
       } else {
-        await axios.post(`${API_BASE_URL}/staff`, currentStaff);
+        await api.post('/api/staff', currentStaff);
         showToast('success', 'Staff created successfully');
       }
-      fetchStaff();
+      fetchStaff(true);
       setIsModalOpen(false);
     } catch (error) {
       console.error('Error saving staff:', error);
@@ -97,9 +101,9 @@ const StaffManagement = () => {
     const result = await showDeleteConfirmation('Remove Staff?', 'This action cannot be undone.');
     if (result.isConfirmed) {
       try {
-        await axios.delete(`${API_BASE_URL}/staff/${id}`);
+        await api.delete(`/api/staff/${id}`);
         showToast('success', 'Staff removed successfully');
-        fetchStaff();
+        fetchStaff(true);
       } catch (error) {
         showToast('error', 'Failed to remove staff');
       }
@@ -115,8 +119,8 @@ const StaffManagement = () => {
   };
 
   const filteredStaff = staffList.filter(s => {
-    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         s.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === 'all' || s.role === roleFilter;
     return matchesSearch && matchesRole;
   }).sort((a, b) => {
@@ -124,6 +128,16 @@ const StaffManagement = () => {
     if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
   });
+
+  const totalPages = Math.ceil(filteredStaff.length / itemsPerPage);
+  const paginatedStaff = filteredStaff.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -164,6 +178,19 @@ const StaffManagement = () => {
               <option value="waiter">Waiter</option>
               <option value="cashier">Cashier</option>
             </select>
+            <button
+              onClick={() => { setSearchTerm(''); setRoleFilter('all'); }}
+              disabled={!searchTerm && roleFilter === 'all'}
+              className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg border transition-all ${
+                !searchTerm && roleFilter === 'all'
+                  ? 'bg-background-muted/50 text-text-muted/30 border-border-light cursor-not-allowed'
+                  : 'bg-primary/10 text-primary border-primary/20 hover:bg-primary hover:text-white'
+              }`}
+              title="Clear All Filters"
+            >
+              <RotateCcw size={12} />
+              <span className="text-[10px] font-black uppercase tracking-wider">Clear Filters</span>
+            </button>
           </div>
         </div>
 
@@ -171,24 +198,27 @@ const StaffManagement = () => {
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-background-muted/50 text-text-secondary uppercase text-[10px] font-black tracking-widest border-b border-border-light">
               <tr>
-                <th className="px-6 py-4 cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('name')}>
+                <th className="px-3 py-4 cursor-pointer hover:text-primary transition-colors" onClick={() => handleSort('name')}>
                   <div className="flex items-center space-x-1">
                     <span>Staff Member</span>
                     <ArrowUpDown size={12} className={sortConfig.key === 'name' ? 'text-primary' : 'text-text-muted'} />
                   </div>
                 </th>
-                <th className="px-6 py-4">Role</th>
-                <th className="px-6 py-4">Employee ID</th>
-                <th className="px-6 py-4">Contact</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-3 py-4">Role</th>
+                <th className="px-3 py-4">Employee ID</th>
+                <th className="px-3 py-4">Contact</th>
+                <th className="px-3 py-4 text-center">Status</th>
+                <th className="px-3 py-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-light">
               {isLoading ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center">
-                    <Loader2 className="animate-spin text-primary mx-auto" size={32} />
+                  <td colSpan="6" className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-6">
+                      <Loader size="large" />
+                      <p className="text-text-secondary text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Loading staff...</p>
+                    </div>
                   </td>
                 </tr>
               ) : filteredStaff.length === 0 ? (
@@ -196,9 +226,9 @@ const StaffManagement = () => {
                   <td colSpan="6" className="px-6 py-12 text-center text-text-muted italic">No staff found</td>
                 </tr>
               ) : (
-                filteredStaff.map((staff) => (
+                paginatedStaff.map((staff) => (
                   <tr key={staff._id} className="hover:bg-background-muted/30 transition-colors group">
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
                           {staff.name.charAt(0)}
@@ -209,7 +239,7 @@ const StaffManagement = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${
                         staff.role === 'kitchen' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
                         staff.role === 'waiter' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
@@ -218,21 +248,21 @@ const StaffManagement = () => {
                         {staff.role}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-mono font-bold text-text-primary">{staff.employeeId}</td>
-                    <td className="px-6 py-4 text-text-secondary text-xs">
+                    <td className="px-3 py-4 font-mono font-bold text-text-primary">{staff.employeeId}</td>
+                    <td className="px-3 py-4 text-text-secondary text-xs">
                       <div className="flex flex-col">
                         <span className="flex items-center space-x-1"><Phone size={10} /> <span>{staff.phoneNumber}</span></span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-4 text-center">
                       <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border ${
                         staff.isActive ? 'bg-status-on/10 text-status-available border-status-on/20' : 'bg-status-off/10 text-status-unavailable border-status-off/20'
                       }`}>
                         {staff.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end space-x-1">
+                    <td className="px-3 py-4 text-center">
+                      <div className="flex items-center justify-center space-x-1">
                         <button onClick={() => handleOpenModal(staff)} className="p-2 hover:bg-primary/10 text-text-secondary hover:text-primary rounded-lg transition-all">
                           <Edit2 size={18} />
                         </button>
@@ -247,6 +277,12 @@ const StaffManagement = () => {
             </tbody>
           </table>
         </div>
+
+        <Pagination 
+          currentPage={currentPage} 
+          totalPages={totalPages} 
+          onPageChange={setCurrentPage} 
+        />
       </div>
 
       {/* Staff Modal */}

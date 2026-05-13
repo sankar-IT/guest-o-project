@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Image as ImageIcon, Filter, CheckCircle2, XCircle, AlertCircle, Loader2, ArrowUpDown, RotateCcw } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Image as ImageIcon, Filter, CheckCircle2, XCircle, AlertCircle, Loader2, ArrowUpDown, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import axios from 'axios';
+import api from '../../../api/axiosInstance';
 import { showAlert, showToast, showDeleteConfirmation } from '../../../utils/sweetAlert';
 import ImageCropper from '../../../components/ImageCropper/ImageCropper';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import Loader from '../../../components/Loader/Loader';
+import Pagination from '../../../components/Pagination/Pagination';
 
 const MenuSection = () => {
   const [menus, setMenus] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(localStorage.getItem('menuSearchTerm') || '');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [stockFilter, setStockFilter] = useState('all');
@@ -26,10 +29,10 @@ const MenuSection = () => {
     image: '',
     foodType: 'veg',
     totalStock: 0,
-    isBlocked: false
+    isBlocked: false,
+    includedItems: [] // Global addons if needed, but we'll focus on variants
   });
 
-  const [allSizes, setAllSizes] = useState([]);
 
   const [isUploading, setIsUploading] = useState(false);
 
@@ -44,21 +47,19 @@ const MenuSection = () => {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
-    setIsLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
-      const [menuRes, catRes, sizeRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/menu`),
-        axios.get(`${API_BASE_URL}/categories`),
-        axios.get(`${API_BASE_URL}/sizes`)
+      const [menuRes, catRes] = await Promise.all([
+        api.get('/api/menus?all=true'),
+        api.get('/api/categories')
       ]);
       setMenus(menuRes.data);
       setCategories(catRes.data.filter(c => c.isActive));
-      setAllSizes(sizeRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -68,8 +69,14 @@ const MenuSection = () => {
         ...menu,
         category: menu.category?._id || menu.category,
         variants: menu.variants?.map(v => ({
-          size: v.size?._id || v.size,
-          price: v.price
+          size: v.size,
+          price: v.price,
+          costPrice: v.costPrice || 0,
+          stockValue: v.stockValue || 1,
+          includedItems: v.includedItems?.map(inc => ({
+            menuItem: inc.menuItem?._id || inc.menuItem,
+            quantity: inc.quantity
+          })) || []
         })) || []
       });
       setIsEditing(true);
@@ -91,6 +98,27 @@ const MenuSection = () => {
     setIsModalOpen(true);
   };
 
+  const handleAddIncludedItem = (variantIndex) => {
+    const newVariants = [...currentMenu.variants];
+    if (!newVariants[variantIndex].includedItems) {
+      newVariants[variantIndex].includedItems = [];
+    }
+    newVariants[variantIndex].includedItems.push({ menuItem: '', quantity: 1 });
+    setCurrentMenu({ ...currentMenu, variants: newVariants });
+  };
+
+  const handleRemoveIncludedItem = (variantIndex, itemIndex) => {
+    const newVariants = [...currentMenu.variants];
+    newVariants[variantIndex].includedItems.splice(itemIndex, 1);
+    setCurrentMenu({ ...currentMenu, variants: newVariants });
+  };
+
+  const handleIncludedItemChange = (variantIndex, itemIndex, field, value) => {
+    const newVariants = [...currentMenu.variants];
+    newVariants[variantIndex].includedItems[itemIndex][field] = field === 'quantity' ? parseInt(value) || 1 : value;
+    setCurrentMenu({ ...currentMenu, variants: newVariants });
+  };
+
   const handleSave = async () => {
     if (!currentMenu.name || !currentMenu.category) {
       showToast('warning', 'Name and Category are required');
@@ -104,13 +132,13 @@ const MenuSection = () => {
 
     try {
       if (isEditing) {
-        await axios.put(`${API_BASE_URL}/menu/${currentMenu._id}`, currentMenu);
+        await api.put(`/api/menus/${currentMenu._id}`, currentMenu);
       } else {
-        await axios.post(`${API_BASE_URL}/menu`, currentMenu);
+        await api.post('/api/menus', currentMenu);
       }
-      fetchData();
+      fetchData(true);
       setIsModalOpen(false);
-      showToast('success', `Menu item ${isEditing ? 'updated' : 'created'} successfully!`);
+      showToast('success', `Item ${isEditing ? 'updated' : 'created'} successfully!`);
     } catch (error) {
       console.error('Error saving menu item:', error);
       showAlert({
@@ -126,9 +154,9 @@ const MenuSection = () => {
     
     if (result.isConfirmed) {
       try {
-        await axios.delete(`${API_BASE_URL}/menu/${id}`);
-        fetchData();
-        showToast('success', 'Menu item deleted successfully');
+        await api.delete(`/api/menus/${id}`);
+        fetchData(true);
+        showToast('success', 'Item deleted successfully');
       } catch (error) {
         console.error('Error deleting menu item:', error);
         showToast('error', 'Failed to delete menu item');
@@ -136,10 +164,22 @@ const MenuSection = () => {
     }
   };
 
+  const handleToggleStatus = async (menu) => {
+    try {
+      const updatedMenu = { ...menu, isBlocked: !menu.isBlocked };
+      await api.put(`/api/menus/${menu._id}`, updatedMenu);
+      fetchData(true);
+      showToast('success', `Item ${updatedMenu.isBlocked ? 'blocked' : 'unblocked'} successfully`);
+    } catch (error) {
+      console.error('Error toggling menu status:', error);
+      showToast('error', 'Failed to update menu status');
+    }
+  };
+
   const handleAddSize = () => {
     setCurrentMenu({
       ...currentMenu,
-      variants: [...currentMenu.variants, { size: '', price: 0 }]
+      variants: [...currentMenu.variants, { size: '', price: 0, costPrice: 0, stockValue: 1, includedItems: [] }]
     });
   };
 
@@ -151,7 +191,7 @@ const MenuSection = () => {
 
   const handleSizeChange = (index, field, value) => {
     const newVariants = [...currentMenu.variants];
-    newVariants[index][field] = field === 'price' ? (value === '' ? '' : parseFloat(value)) : value;
+    newVariants[index][field] = (field === 'price' || field === 'stockValue' || field === 'costPrice') ? (value === '' ? '' : parseFloat(value)) : value;
     setCurrentMenu({ ...currentMenu, variants: newVariants });
   };
 
@@ -171,24 +211,16 @@ const MenuSection = () => {
 
   const handleCropComplete = async (croppedFile) => {
     setShowCropper(false);
-    const formData = new FormData();
-    formData.append('image', croppedFile);
-
     setIsUploading(true);
     try {
-      // Replace with your actual API base URL if different
-      const response = await fetch('http://localhost:5000/api/upload/image', {
-        method: 'POST',
-        body: formData,
+      const formData = new FormData();
+      formData.append('image', croppedFile);
+
+      const response = await api.post('/api/upload/image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || 'Upload failed');
-      }
-
-      const data = await response.json();
-      setCurrentMenu({ ...currentMenu, image: data.url });
+      setCurrentMenu({ ...currentMenu, image: response.data.url });
     } catch (error) {
       console.error('Error uploading image:', error);
       let errorMsg = error.message || 'Failed to upload image.';
@@ -197,7 +229,7 @@ const MenuSection = () => {
         showAlert({
           icon: 'error',
           title: 'File Too Large',
-          text: 'The image size exceeds the 2MB limit. Please upload a smaller file.',
+          text: 'The image size exceeds the 3MB limit. Please upload a smaller file.',
         });
       } else {
         showAlert({
@@ -247,10 +279,22 @@ const MenuSection = () => {
     const matchesCategory = categoryFilter === 'all' || m.category?._id === categoryFilter;
     const matchesType = typeFilter === 'all' || m.foodType === typeFilter;
     const matchesStock = stockFilter === 'all' || 
-                        (stockFilter === 'available' ? m.totalStock > 0 : m.totalStock === 0);
+                        (stockFilter === 'available' ? m.totalStock > 0 : 
+                         stockFilter === 'low-stock' ? (m.totalStock > 0 && m.totalStock <= 10) :
+                         m.totalStock === 0);
     
     return matchesSearch && matchesCategory && matchesType && matchesStock;
   });
+
+  const totalPages = Math.ceil(filteredMenus.length / itemsPerPage);
+  const paginatedMenus = filteredMenus.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter, typeFilter, stockFilter]);
 
   const [selectedSizes, setSelectedSizes] = useState({});
 
@@ -259,7 +303,7 @@ const MenuSection = () => {
       const initialSizes = {};
       menus.forEach(menu => {
         if (menu.variants?.length > 0) {
-          initialSizes[menu._id] = menu.variants[0].size?._id || menu.variants[0].size;
+          initialSizes[menu._id] = menu.variants[0].size;
         }
       });
       setSelectedSizes(initialSizes);
@@ -274,11 +318,10 @@ const MenuSection = () => {
     const selectedSizeId = selectedSizes[menu._id];
     if (!selectedSizeId) return menu.totalStock || 0;
 
-    const variant = menu.variants?.find(v => (v.size?._id || v.size) === selectedSizeId);
-    if (!variant || !variant.size) return menu.totalStock || 0;
+    const variant = menu.variants?.find(v => v.size === selectedSizeId);
+    if (!variant) return menu.totalStock || 0;
 
-    // Use the multiplier value from the size object
-    const multiplier = variant.size.value || 1;
+    const multiplier = variant.stockValue || 1;
     return Math.floor((menu.totalStock || 0) / multiplier);
   };
 
@@ -307,7 +350,10 @@ const MenuSection = () => {
                 type="text"
                 placeholder="Search items or categories..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  localStorage.setItem('menuSearchTerm', e.target.value);
+                }}
                 className="w-full pl-10 pr-4 py-2 bg-background-card rounded-lg border border-border-main focus:border-primary/50 transition-all outline-none text-sm"
               />
             </div>
@@ -341,10 +387,17 @@ const MenuSection = () => {
               >
                 <option value="all" className="bg-background-card text-text-primary">All Stock</option>
                 <option value="available" className="bg-background-card text-text-primary">Available</option>
+                <option value="low-stock" className="bg-background-card text-text-primary">Low Stock</option>
                 <option value="out-of-stock" className="bg-background-card text-text-primary">Out of Stock</option>
               </select>
               <button
-                onClick={() => { setSearchTerm(''); setCategoryFilter('all'); setTypeFilter('all'); setStockFilter('all'); }}
+                onClick={() => { 
+                  setSearchTerm(''); 
+                  localStorage.removeItem('menuSearchTerm');
+                  setCategoryFilter('all'); 
+                  setTypeFilter('all'); 
+                  setStockFilter('all'); 
+                }}
                 disabled={!searchTerm && categoryFilter === 'all' && typeFilter === 'all' && stockFilter === 'all'}
                 className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg border transition-all ${
                   !searchTerm && categoryFilter === 'all' && typeFilter === 'all' && stockFilter === 'all'
@@ -364,52 +417,52 @@ const MenuSection = () => {
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-background-muted/50 text-text-secondary uppercase text-[10px] font-bold tracking-widest border-b border-border-light">
               <tr>
-                <th className="px-4 py-4 w-12 text-center">#</th>
-                <th className="px-6 py-4 cursor-pointer hover:text-primary transition-colors group min-w-[200px]" onClick={() => handleSort('name')}>
+                <th className="px-2 py-4 w-12 text-center">#</th>
+                <th className="px-3 py-4 cursor-pointer hover:text-primary transition-colors group min-w-[200px]" onClick={() => handleSort('name')}>
                   <div className="flex items-center space-x-1">
                     <span>Menu Item</span>
                     <ArrowUpDown size={12} className={`opacity-0 group-hover:opacity-100 transition-opacity ${sortConfig.key === 'name' ? 'opacity-100 text-primary' : ''}`} />
                   </div>
                 </th>
-                <th className="px-6 py-4 cursor-pointer hover:text-primary transition-colors group" onClick={() => handleSort('category')}>
+                <th className="px-3 py-4 cursor-pointer hover:text-primary transition-colors group" onClick={() => handleSort('category')}>
                   <div className="flex items-center space-x-1">
                     <span>Category</span>
                     <ArrowUpDown size={12} className={`opacity-0 group-hover:opacity-100 transition-opacity ${sortConfig.key === 'category' ? 'opacity-100 text-primary' : ''}`} />
                   </div>
                 </th>
-                <th className="px-6 py-4 text-center">Type</th>
-                <th className="px-6 py-4 cursor-pointer hover:text-primary transition-colors group min-w-[120px]" onClick={() => handleSort('price')}>
+                <th className="px-3 py-4 text-center">Type</th>
+                <th className="px-3 py-4 cursor-pointer hover:text-primary transition-colors group min-w-[120px]" onClick={() => handleSort('price')}>
                   <div className="flex items-center space-x-1">
                     <span>Pricing</span>
                     <ArrowUpDown size={12} className={`opacity-0 group-hover:opacity-100 transition-opacity ${sortConfig.key === 'price' ? 'opacity-100 text-primary' : ''}`} />
                   </div>
                 </th>
-                <th className="px-6 py-4 text-center">Inventory</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-3 py-4 text-center">Inventory</th>
+                <th className="px-3 py-4 text-center">Status</th>
+                <th className="px-3 py-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-light">
               {isLoading ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center space-y-2">
-                      <Loader2 className="animate-spin text-primary" size={32} />
-                      <p className="text-text-secondary font-medium">Loading menu items...</p>
+                  <td colSpan="8" className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-6">
+                      <Loader size="large" />
+                      <p className="text-text-secondary text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Loading menu items...</p>
                     </div>
                   </td>
                 </tr>
-              ) : filteredMenus.length === 0 ? (
+              ) : paginatedMenus.length === 0 ? (
                 <tr>
                   <td colSpan="8" className="px-6 py-12 text-center">
                     <p className="text-text-muted italic">No menu items found.</p>
                   </td>
                 </tr>
               ) : (
-                filteredMenus.map((menu, index) => (
+                paginatedMenus.map((menu, index) => (
                   <tr key={menu._id} className="hover:bg-background-muted/30 transition-colors group align-middle">
-                    <td className="px-4 py-4 text-center font-medium text-text-muted">{index + 1}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-2 py-4 text-center font-medium text-text-muted">{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                    <td className="px-3 py-4">
                       <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 rounded-xl bg-background-muted overflow-hidden shrink-0 border border-border-light shadow-sm">
                           {menu.image ? (
@@ -426,12 +479,12 @@ const MenuSection = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <span className="text-[11px] font-bold text-text-secondary bg-background-muted/50 px-2.5 py-1 rounded-full border border-border-light">
                         {menu.category?.name || 'Uncategorized'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-4 text-center">
                       <div className="flex justify-center">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
                           menu.foodType === 'veg' 
@@ -442,7 +495,7 @@ const MenuSection = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <div className="flex flex-col space-y-2">
                         {menu.variants?.length > 0 ? (
                           <div className="relative">
@@ -452,8 +505,8 @@ const MenuSection = () => {
                               className="w-full bg-background-muted/50 border border-border-light rounded-lg px-2 py-1 text-[11px] font-bold text-text-primary outline-none focus:border-primary/50 transition-all cursor-pointer"
                             >
                               {menu.variants.map((v, idx) => (
-                                <option key={idx} value={v.size?._id || v.size}>
-                                  {v.size?.name || 'Size'}: ₹{v.price}
+                                <option key={idx} value={v.size}>
+                                  {v.size}: ₹{v.price}
                                 </option>
                               ))}
                             </select>
@@ -470,16 +523,21 @@ const MenuSection = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-4 text-center">
                       <div className="flex flex-col items-center">
                         {menu.totalStock > 0 ? (
                           <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
-                            <span className="text-sm font-black text-text-primary">
+                            <span className={`text-sm font-black ${menu.totalStock <= 10 ? 'text-amber-600' : 'text-text-primary'}`}>
                               {getCalculatedStock(menu)}
                             </span>
                             <span className="text-[9px] text-text-muted font-bold uppercase tracking-tighter">
-                              {menu.variants?.find(v => (v.size?._id || v.size) === selectedSizes[menu._id])?.size?.name || 'Units'} Available
+                              {menu.variants?.find(v => v.size === selectedSizes[menu._id])?.size || 'Units'} Available
                             </span>
+                            {menu.totalStock <= 10 && (
+                              <span className="mt-1 px-1.5 py-0.5 bg-amber-500/10 text-amber-600 text-[8px] font-black uppercase rounded border border-amber-500/20">
+                                Low Stock
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <span className="text-[9px] font-black text-status-unavailable uppercase bg-status-off/10 px-2 py-1 rounded border border-status-off/20">
@@ -488,7 +546,7 @@ const MenuSection = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-4 text-center">
                       <div className="flex justify-center">
                         <span className={`flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
                           !menu.isBlocked 
@@ -500,8 +558,19 @@ const MenuSection = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end space-x-1">
+                    <td className="px-3 py-4 text-center">
+                      <div className="flex items-center justify-center space-x-1">
+                        <button 
+                          onClick={() => handleToggleStatus(menu)}
+                          className={`p-2 rounded-xl transition-all duration-200 ${
+                            !menu.isBlocked 
+                              ? 'text-status-unavailable hover:bg-status-off/10' 
+                              : 'text-status-available hover:bg-status-on/10'
+                          }`}
+                          title={!menu.isBlocked ? "Hide from Menu" : "Show in Menu"}
+                        >
+                          {!menu.isBlocked ? <XCircle size={16} /> : <CheckCircle2 size={16} />}
+                        </button>
                         <button 
                           onClick={() => handleOpenModal(menu)}
                           className="p-2 text-text-secondary hover:text-primary hover:bg-primary/10 rounded-xl transition-all duration-200"
@@ -524,6 +593,12 @@ const MenuSection = () => {
             </tbody>
           </table>
         </div>
+
+        <Pagination 
+          currentPage={currentPage} 
+          totalPages={totalPages} 
+          onPageChange={setCurrentPage} 
+        />
       </div>
 
       {/* Large Modal for Menu Item */}
@@ -606,11 +681,7 @@ const MenuSection = () => {
               <div className="bg-background-muted/30 p-4 rounded-2xl border border-border-light space-y-4">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-semibold text-text-secondary">Total Stock</label>
-                  {currentMenu.variants?.[0]?.size && (
-                    <span className="text-[10px] font-bold text-text-muted uppercase">
-                      In {allSizes.find(s => s._id === currentMenu.variants[0].size)?.unit || 'Base Units'}
-                    </span>
-                  )}
+                  <p className="text-[10px] text-text-muted uppercase">Base Stock (e.g. Total Pieces)</p>
                 </div>
                 <input
                   type="number"
@@ -620,50 +691,127 @@ const MenuSection = () => {
                   placeholder="Total base units (e.g. total pieces)"
                 />
                 <p className="text-[10px] text-text-muted italic">* Stock is tracked in base units (e.g. pieces)</p>
-              </div>
-
-              <div className="space-y-3">
+              </div>              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-semibold text-text-secondary">Size Variants & Pricing</label>
                   <button 
+                    type="button"
                     onClick={handleAddSize}
-                    className="text-xs font-bold text-primary hover:underline flex items-center space-x-1"
+                    className="text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/5 px-3 py-1.5 rounded-xl border border-primary/20 transition-all flex items-center space-x-1.5"
                   >
                     <Plus size={14} />
                     <span>Add Variant</span>
                   </button>
                 </div>
-                <div className="space-y-3">
-                  {currentMenu.variants.map((variant, index) => (
-                    <div key={index} className="flex items-center space-x-3 group/size bg-background-muted/30 p-3 rounded-xl border border-border-light">
-                      <div className="flex-1">
-                        <select
-                          value={variant.size}
-                          onChange={(e) => handleSizeChange(index, 'size', e.target.value)}
-                          className="w-full px-3 py-1.5 bg-background-card rounded-lg border border-border-main focus:border-primary outline-none transition-all text-sm"
+                <div className="space-y-4">
+                  {currentMenu.variants.map((variant, idx) => (
+                    <div key={idx} className="group/variant bg-background-muted/30 p-4 rounded-2xl border border-border-light space-y-4 animate-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center justify-between border-b border-border-light pb-2">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-text-muted">Variant #{idx + 1}</span>
+                        <button 
+                          type="button"
+                          onClick={() => handleRemoveSize(idx)}
+                          className="p-1.5 text-text-muted hover:text-status-unavailable hover:bg-status-off/10 rounded-lg transition-all"
+                          title="Remove Variant"
                         >
-                          <option value="">Select Size</option>
-                          {allSizes.filter(s => s.isActive || s._id === variant.size).map(s => (
-                            <option key={s._id} value={s._id}>{s.name} ({s.value} {s.unit})</option>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Size Name</label>
+                          <input
+                            type="text"
+                            value={variant.size}
+                            onChange={(e) => handleSizeChange(idx, 'size', e.target.value)}
+                            className="w-full px-4 py-3 bg-background-card border border-border-main focus:border-primary/50 rounded-xl text-xs font-bold transition-all outline-none"
+                            placeholder="e.g. Full"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Sell Price (₹)</label>
+                          <input
+                            type="number"
+                            value={variant.price || ''}
+                            onChange={(e) => handleSizeChange(idx, 'price', e.target.value)}
+                            className="w-full px-4 py-3 bg-background-card border border-border-main focus:border-primary/50 rounded-xl text-xs font-bold transition-all outline-none"
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1">Cost Price (₹)</label>
+                          <input
+                            type="number"
+                            value={variant.costPrice || ''}
+                            onChange={(e) => handleSizeChange(idx, 'costPrice', e.target.value)}
+                            className="w-full px-4 py-3 bg-background-card border border-border-main focus:border-primary/50 rounded-xl text-xs font-bold transition-all outline-none"
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-text-secondary uppercase tracking-wider ml-1 flex items-center justify-between">
+                            <span>Stock Val</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={variant.stockValue}
+                            onChange={(e) => handleSizeChange(idx, 'stockValue', e.target.value)}
+                            className="w-full px-4 py-3 bg-background-card border border-border-main focus:border-primary/50 rounded-xl text-xs font-bold transition-all outline-none"
+                            placeholder="1"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Included Items Section */}
+                      <div className="pt-2 border-t border-border-light/50">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-text-muted">Included Items (Inventory Deduction)</span>
+                          <button 
+                            type="button"
+                            onClick={() => handleAddIncludedItem(idx)}
+                            className="text-[9px] font-bold text-primary hover:bg-primary/5 px-2 py-1 rounded-lg border border-primary/20 transition-all flex items-center space-x-1"
+                          >
+                            <Plus size={10} />
+                            <span>Add Item</span>
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          {variant.includedItems?.map((included, incIdx) => (
+                            <div key={incIdx} className="flex items-center space-x-2 bg-background-card/50 p-2 rounded-xl border border-border-main/50 animate-in slide-in-from-left-2 duration-200">
+                              <select
+                                value={included.menuItem}
+                                onChange={(e) => handleIncludedItemChange(idx, incIdx, 'menuItem', e.target.value)}
+                                className="flex-1 bg-transparent border-0 text-[11px] font-bold text-text-primary outline-none focus:ring-0 cursor-pointer"
+                              >
+                                <option value="">Select Item</option>
+                                {menus.filter(m => m._id !== currentMenu._id).map(m => (
+                                  <option key={m._id} value={m._id}>{m.name}</option>
+                                ))}
+                              </select>
+                              <div className="flex items-center space-x-2 border-l border-border-main pl-2">
+                                <span className="text-[10px] font-black text-text-muted">QTY:</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={included.quantity}
+                                  onChange={(e) => handleIncludedItemChange(idx, incIdx, 'quantity', e.target.value)}
+                                  className="w-10 bg-transparent border-0 text-[11px] font-black text-primary text-center outline-none focus:ring-0 p-0"
+                                />
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => handleRemoveIncludedItem(idx, incIdx)}
+                                className="p-1 text-text-muted hover:text-status-unavailable transition-colors"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
                           ))}
-                        </select>
+                        </div>
                       </div>
-                      <div className="relative w-32">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">₹</span>
-                        <input
-                          type="number"
-                          placeholder="Price"
-                          value={variant.price === 0 ? '' : variant.price}
-                          onChange={(e) => handleSizeChange(index, 'price', e.target.value)}
-                          className="w-full pl-7 pr-3 py-1.5 bg-background-card rounded-lg border border-border-main text-sm outline-none focus:border-primary"
-                        />
-                      </div>
-                      <button 
-                        onClick={() => handleRemoveSize(index)}
-                        className="p-1.5 text-text-muted hover:text-status-unavailable hover:bg-status-off/10 rounded-md transition-all"
-                      >
-                        <Trash2 size={16} />
-                      </button>
                     </div>
                   ))}
                   {currentMenu.variants.length === 0 && (
@@ -674,51 +822,7 @@ const MenuSection = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                   <div className="flex items-center space-x-3">
-                    <label className="text-sm font-semibold text-text-secondary">Has Offer?</label>
-                    <button
-                      onClick={() => setCurrentMenu({...currentMenu, hasOffer: !currentMenu.hasOffer})}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                        currentMenu.hasOffer ? 'bg-primary' : 'bg-text-muted'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        currentMenu.hasOffer ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
-                  </div>
-                  {currentMenu.hasOffer && (
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm">₹</span>
-                      <input
-                        type="number"
-                        placeholder="Offer Price"
-                        value={currentMenu.offerPrice === 0 ? '' : currentMenu.offerPrice}
-                        onChange={(e) => setCurrentMenu({...currentMenu, offerPrice: e.target.value === '' ? 0 : parseFloat(e.target.value)})}
-                        className="w-full pl-7 pr-3 py-2 bg-background-muted/50 rounded-xl border border-border-main focus:border-primary outline-none transition-all"
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3">
-                    <label className="text-sm font-semibold text-text-secondary">Block Item?</label>
-                    <button
-                      onClick={() => setCurrentMenu({...currentMenu, isBlocked: !currentMenu.isBlocked})}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                        currentMenu.isBlocked ? 'bg-status-off' : 'bg-text-muted'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        currentMenu.isBlocked ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
-                    <span className="text-xs text-text-muted">Temporarily hide from menu</span>
-                  </div>
-                </div>
-              </div>
+
 
               <div className="space-y-3">
                 <label className="text-sm font-semibold text-text-secondary">Item Image</label>
@@ -746,7 +850,7 @@ const MenuSection = () => {
                           disabled={isUploading}
                         />
                       </label>
-                      <p className="text-[10px] text-text-muted">Recommended: Square image, max 2MB (JPG, PNG, WebP)</p>
+                      <p className="text-[10px] text-text-muted">Recommended: Square image, max 3MB (JPG, PNG, WebP)</p>
                     </div>
                   </div>
                   <div className="space-y-1.5">

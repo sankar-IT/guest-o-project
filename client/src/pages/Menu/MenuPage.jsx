@@ -63,9 +63,9 @@ const MenuPage = () => {
             </button>
             <div className="logo-container">
               <img 
-                src={theme === 'dark' ? "/logo-light.png" : "/logo-dark.png"} 
+                src="/logo-golden.png" 
                 alt="Guesto Logo" 
-                className="menu-logo" 
+                className="menu-logo h-10 w-auto" 
               />
             </div>
           </div>

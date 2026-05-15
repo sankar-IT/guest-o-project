@@ -15,10 +15,28 @@ export const getSettings = async (req, res) => {
   }
 };
 
+export const getStoreStatus = async (req, res) => {
+  try {
+    const settings = await Settings.getSettings();
+    res.status(200).json({
+      success: true,
+      data: {
+        isOpen: settings.operationalSettings?.isStoreOpen ?? true,
+        message: settings.operationalSettings?.isStoreOpen ? 'Store is open' : 'Store is closed'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 export const updateSettings = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
-    
+
     // Update top-level fields and mark them as modified for Mongoose
     Object.keys(req.body).forEach(key => {
       if (req.body[key] !== undefined) {
@@ -28,7 +46,7 @@ export const updateSettings = async (req, res) => {
     });
 
     await settings.save();
-    
+
     res.status(200).json({
       success: true,
       message: 'Settings updated successfully',

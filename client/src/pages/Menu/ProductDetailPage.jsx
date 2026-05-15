@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { Sun, Moon, Loader2, ArrowLeft } from 'lucide-react';
 import api from '../../api/axiosInstance';
@@ -7,8 +7,9 @@ import { useCart } from '../../context/CartContext';
 
 const ProductDetailPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const { addToCart } = useCart();
+  const { addToCart, addToTableCart, activeTableId } = useCart();
   const [product, setProduct] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -45,9 +46,12 @@ const ProductDetailPage = () => {
     return (
       <div className="container-menu pt-40 pb-20 text-center bg-surface">
         <h2 className="text-3xl font-serif mb-4 text-primary">Product Not Found</h2>
-        <Link to="/menu" className="text-secondary hover:underline flex items-center justify-center gap-2">
+        <button 
+          onClick={() => navigate(-1)} 
+          className="text-secondary hover:underline flex items-center justify-center gap-2 mx-auto"
+        >
           <ArrowLeft size={20} /> Back to Menu
-        </Link>
+        </button>
       </div>
     );
   }
@@ -57,19 +61,33 @@ const ProductDetailPage = () => {
 
   const handleAddToCart = () => {
     if (!selectedVariant) return;
-    addToCart(product, selectedVariant);
+    
+    const isWaiter = window.location.pathname.startsWith('/waiter');
+    
+    if (isWaiter && activeTableId) {
+      addToTableCart(activeTableId, product, selectedVariant);
+      // Optional: show feedback
+      import('../../utils/sweetAlert').then(({ showToast }) => {
+        showToast('success', 'Item added to table order');
+      });
+    } else {
+      addToCart(product, selectedVariant);
+      import('../../utils/sweetAlert').then(({ showToast }) => {
+        showToast('success', 'Item added to cart');
+      });
+    }
   };
 
   return (
-    <div className="product-detail-page pt-4 pb-12 min-h-screen bg-surface">
+    <div className="product-detail-page pt-4 pb-12 min-h-screen bg-menu">
       <div className="container-menu">
         <div className="header-top flex justify-between items-center mb-6">
           <div className="logo-container">
-            <Link to="/menu">
+            <Link to={window.location.pathname.startsWith('/waiter') ? "/waiter/dashboard" : "/menu"}>
               <img 
-                src={theme === 'dark' ? "/logo-light.png" : "/logo-dark.png"} 
+                src="/logo-golden.png" 
                 alt="Guesto Logo" 
-                className="menu-logo" 
+                className="menu-logo h-10 w-auto" 
               />
             </Link>
           </div>
@@ -82,60 +100,42 @@ const ProductDetailPage = () => {
           </button>
         </div>
 
-        <Link to="/menu" className="back-link flex items-center gap-2 mb-6 text-xs uppercase tracking-widest font-semibold text-primary/60 hover:text-secondary transition-colors">
+        <button 
+          onClick={() => navigate(-1)} 
+          className="back-link flex items-center gap-2 mb-10 text-[10px] uppercase tracking-[0.2em] font-bold text-primary-menu opacity-60 hover:opacity-100 hover:text-secondary-menu transition-all bg-transparent border-none cursor-pointer"
+        >
           <ArrowLeft size={16} />
-          Back to Menu
-        </Link>
+          Back to Selection
+        </button>
 
-        <div className="product-layout grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-start">
+        <div className="product-layout grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
           <div className="product-image-section">
-            <div className="product-image-wrapper rounded-3xl overflow-hidden shadow-2xl">
+            <div className="product-image-wrapper rounded-[40px] overflow-hidden shadow-[0_30px_80px_rgba(50,23,22,0.15)] border border-border-menu">
               <img 
                 src={product.image} 
                 alt={product.name} 
-                className="w-full h-auto object-cover transform hover:scale-105 transition-transform duration-700" 
+                className="w-full h-auto object-cover transform hover:scale-110 transition-transform duration-[1.2s] ease-out" 
               />
             </div>
           </div>
 
           <div className="product-info-section">
-            <div className="mb-6">
-              <span className="text-xs uppercase tracking-[0.2em] font-bold text-secondary mb-2 block">
-                {product.category?.name || 'Category'}
+            <div className="mb-8">
+              <span className="text-[11px] uppercase tracking-[0.3em] font-bold text-secondary-menu mb-4 block">
+                {product.category?.name || 'Curated Selection'}
               </span>
-              <h1 className="text-3xl lg:text-5xl font-serif font-bold text-primary mb-3 leading-tight">
+              <h1 className="text-4xl lg:text-6xl font-serif font-bold text-primary-menu mb-6 leading-[1.1] letter-spacing-[-0.02em]">
                 {product.name}
               </h1>
-              <div className="flex flex-wrap items-center gap-4 mb-8">
-                <span className="text-2xl lg:text-3xl font-sans font-medium text-primary">
+              
+              <div className="flex items-center gap-6 mb-10">
+                <span className="text-3xl lg:text-4xl font-sans font-bold text-secondary-menu">
                   ₹{price}
                 </span>
-                
-                {product.variants?.length > 0 && (
-                  <>
-                    <div className="h-4 w-[1px] bg-primary/20"></div>
-                    <div className="flex gap-2">
-                      {product.variants.map((v) => (
-                        <button 
-                          key={v.size} 
-                          onClick={() => setSelectedVariant(v)}
-                          className={`px-3 py-1 border transition-all text-[10px] uppercase tracking-wider font-bold rounded-md ${
-                            selectedVariant?.size === v.size 
-                            ? 'border-primary bg-primary text-white' 
-                            : 'border-primary/20 text-primary/60 bg-surface-menu'
-                          }`}
-                        >
-                          {v.size}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                <div className="h-4 w-[1px] bg-primary/20"></div>
+                <div className="h-8 w-[1px] bg-border-menu"></div>
                 <div className="flex gap-2">
                   {tags.map((tag) => (
-                    <span key={tag} className="px-3 py-1 bg-tertiary/10 text-[10px] uppercase tracking-wider font-bold rounded-full text-primary/70">
+                    <span key={tag} className="px-3 py-1 bg-surface-muted-menu text-[10px] uppercase tracking-wider font-bold rounded-full text-text-secondary-menu">
                       {tag}
                     </span>
                   ))}
@@ -143,29 +143,54 @@ const ProductDetailPage = () => {
               </div>
             </div>
 
-            <div className="product-description mb-10">
-              <p className="text-base lg:text-lg text-on-surface-variant leading-relaxed mb-6">
-                {product.description}
+            <div className="product-description mb-12">
+              <h3 className="text-sm uppercase tracking-widest font-bold text-primary-menu mb-4 opacity-40">Description</h3>
+              <p className="text-lg lg:text-xl text-text-secondary-menu font-sans leading-relaxed italic opacity-90">
+                "{product.description}"
               </p>
-              
-              <div className="nutritional-info mt-8 p-4 bg-surface-alt rounded-xl border border-primary/5">
-                <p className="text-xs text-on-surface-variant/70 italic">
-                  Available Stock: {product.totalStock} units
-                </p>
-              </div>
             </div>
 
-            <div className="actions flex flex-col sm:flex-row gap-3">
-              <button 
-                onClick={handleAddToCart}
-                disabled={product.isBlocked || product.totalStock <= 0}
-                className="flex-1 py-4 bg-primary text-white rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-primary-light transition-all shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {product.isBlocked ? 'Currently Unavailable' : product.totalStock <= 0 ? 'Out of Stock' : 'Add to Cart'}
-              </button>
-              <button className="flex-1 py-4 border border-primary/20 text-primary rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-primary hover:text-white transition-all">
-                Customise Order
-              </button>
+            {product.variants?.length > 0 && (
+              <div className="product-variants mb-12">
+                <h3 className="text-sm uppercase tracking-widest font-bold text-primary-menu mb-4 opacity-40">Select Size</h3>
+                <div className="flex flex-wrap gap-3">
+                  {product.variants.map((v) => (
+                    <button 
+                      key={v.size} 
+                      onClick={() => setSelectedVariant(v)}
+                      className={`dinesync-variant-chip ${
+                        selectedVariant?.size === v.size ? 'active' : ''
+                      }`}
+                    >
+                      {v.size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {window.location.pathname.startsWith('/waiter') && (
+              <div className="actions flex flex-col sm:flex-row gap-4 mt-12">
+                <button 
+                  onClick={handleAddToCart}
+                  disabled={product.isBlocked || product.totalStock <= 0}
+                  className="dinesync-btn dinesync-btn-primary w-full py-5"
+                >
+                  {product.isBlocked ? 'Currently Unavailable' : product.totalStock <= 0 ? 'Out of Stock' : 'Add to Order'}
+                </button>
+              </div>
+            )}
+
+            <div className="mt-10 pt-10 border-t border-border-menu flex items-center justify-between">
+              <div className="availability flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${product.totalStock > 0 ? 'bg-status-available' : 'bg-status-unavailable'}`}></div>
+                <span className="text-[11px] uppercase tracking-wider font-bold text-text-muted opacity-60">
+                  Stock: {product.totalStock} Available
+                </span>
+              </div>
+              <span className="text-[11px] uppercase tracking-wider font-bold text-text-muted opacity-60">
+                Item ID: {product._id?.substring(0, 8)}
+              </span>
             </div>
           </div>
         </div>

@@ -69,7 +69,9 @@ const LandingPage = () => {
   const fetchCategories = useCallback(async () => {
     try {
       const response = await api.get('/api/categories');
-      setCategories(response.data);
+      if (response.data && response.data.success) {
+        setCategories(response.data.data || []);
+      }
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -91,7 +93,7 @@ const LandingPage = () => {
         }
       });
 
-      const newMenus = response.data;
+      const newMenus = response.data.data || [];
       if (isInitial) {
         setMenus(newMenus);
       } else {
@@ -167,12 +169,12 @@ const LandingPage = () => {
   if (loading && menus.length === 0 && categories.length === 0) {
     return <Loader fullPage={true} />;
   }
-  
+
   return (
     <div className={`min-h-screen bg-background font-sans overflow-x-hidden ${theme}`}>
       <div className="relative w-full overflow-hidden flex flex-col bg-[#B91C1C]">
         <div className="absolute inset-0 z-0 bg-[#B91C1C]"></div>
-        <Navbar 
+        <Navbar
           user={user}
           cartItems={cartItems}
           showUserDropdown={showUserDropdown}
@@ -181,7 +183,7 @@ const LandingPage = () => {
           navigate={navigate}
           dropdownRef={dropdownRef}
         />
-        
+
         <HeroSection
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}

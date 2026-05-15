@@ -263,9 +263,55 @@
 }
 
 .place-order-btn-large {
-  height: 64px;
-  font-size: 1.15rem;
-  font-weight: 800;
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  height: 64px !important;
+  font-size: 1.15rem !important;
+  font-weight: 700 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+  cursor: pointer;
+}
+
+.place-order-btn-large:hover {
+  background: #1a1a1a !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+}
+
+.place-order-btn-large svg {
+  order: 2; /* Icon on the right */
+  width: 22px;
+  height: 22px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.dinesync-btn-outline.full-width {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #e5e5e5 !important;
+  border-radius: 10px !important;
+  height: 56px !important;
+  font-weight: 600 !important;
+  transition: all 0.3s ease !important;
+  cursor: pointer;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.dinesync-btn-outline.full-width:hover {
+  background: #f8f9fa !important;
+  border-color: #000000 !important;
 }
 
 .save-draft-btn {

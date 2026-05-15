@@ -92,10 +92,6 @@ const TableDetail = () => {
           </div>
         </div>
         <div className="header-actions">
-          <button className="dinesync-btn dinesync-btn-secondary">
-            <Receipt size={18} />
-            Split Bill
-          </button>
           <button
             className="dinesync-btn dinesync-btn-primary"
             disabled={remainingSeats === 0}
@@ -152,6 +148,7 @@ const TableDetail = () => {
                           <select
                             className={`status-pill-select ${(order.orderStatus || '').toLowerCase()}`}
                             value={order.orderStatus}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={(e) => handleUpdateStatus(order._id, e.target.value)}
                           >
                             <option value="placed">Placed</option>
@@ -209,7 +206,7 @@ const TableDetail = () => {
         </div>
 
         <aside className="billing-panel-detailed">
-          <div className="dinesync-card summary-card-modern">
+          <div className={`dinesync-card summary-card-modern status-${table.status === 'empty' ? 'available' : table.status === 'full' ? 'occupied' : 'warning'}`}>
             <h3>Table Summary</h3>
             <div className="stat-rows">
               <div className="stat-row">
@@ -246,10 +243,6 @@ const TableDetail = () => {
             </div>
 
             <div className="panel-actions">
-              <button className="dinesync-btn dinesync-btn-primary full-width large">
-                Finalize & Checkout
-                <ChevronRight size={20} />
-              </button>
               <button className="dinesync-btn dinesync-btn-secondary full-width">
                 Print All Drafts
               </button>

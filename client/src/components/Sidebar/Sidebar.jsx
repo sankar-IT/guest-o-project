@@ -30,7 +30,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         <div className="sidebar-header">
           <div className="logo-container">
             <img 
-              src={theme === 'dark' ? "/logo-light.png" : "/logo-light.png"} 
+              src="/logo-golden.png" 
               alt="Guesto Logo" 
               className="sidebar-logo-img" 
               style={{ height: '32px', width: 'auto', objectFit: 'contain' }}

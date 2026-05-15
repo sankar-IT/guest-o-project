@@ -36,7 +36,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const path = window.location.pathname;
       const isLoginRequest = error.config.url.includes('/api/auth/login');
-      
+
       // Don't redirect if we're already on a login page or it's a login attempt
       if (isLoginRequest || path === '/login' || path === '/admin/login' || path === '/staff/login') {
         return Promise.reject(error);

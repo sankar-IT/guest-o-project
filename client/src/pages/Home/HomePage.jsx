@@ -204,7 +204,7 @@ const HomePage = () => {
     return cat ? cat.name : 'Dishes';
   };
 
-  const logoSrc = theme === 'dark' ? "/logo-golden.png" : "/logo-dark.png";
+  const logoSrc = theme === 'dark' ? "/logo-golden.png" : "/logo-golden.png";
 
   if (loading && menus.length === 0 && categories.length === 0) {
     return <Loader fullPage={true} />;

@@ -63,8 +63,8 @@ const SalesSection = () => {
         api.get('/api/menus?all=true'),
         api.get('/api/reports/periodic')
       ]);
-      setMenuItems(menuRes.data);
-      setPeriodicData(periodicRes.data.data);
+      setMenuItems(menuRes.data.data || menuRes.data || []);
+      setPeriodicData(periodicRes.data.data || {});
     } catch (error) {
       console.error('Error fetching initial reporting data:', error);
     }
@@ -77,8 +77,8 @@ const SalesSection = () => {
         api.get('/api/reports/sales', { params: filters }),
         api.get('/api/reports/items', { params: { startDate: filters.startDate, endDate: filters.endDate } })
       ]);
-      setSalesData(salesRes.data.data);
-      setItemStats(itemsRes.data.data);
+      setSalesData(salesRes.data.data || { orders: [], stats: { totalRevenue: 0, totalCost: 0, totalProfit: 0, totalQty: 0 } });
+      setItemStats(itemsRes.data.data || []);
     } catch (error) {
       showToast('error', 'Failed to fetch report data');
     } finally {
@@ -303,7 +303,7 @@ const SalesSection = () => {
               className="w-full px-4 py-2.5 bg-background-muted/30 border border-border-light rounded-xl text-xs font-bold focus:border-primary outline-none appearance-none cursor-pointer"
             >
               <option value="all">All Items</option>
-              {menuItems.map(item => (
+              {Array.isArray(menuItems) && menuItems.map(item => (
                 <option key={item._id} value={item._id}>{item.name}</option>
               ))}
             </select>

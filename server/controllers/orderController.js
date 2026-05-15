@@ -602,7 +602,7 @@ class OrderController {
         };
       }));
       order.items.push(...enrichedItems);
-      
+
       const newSubtotal = order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
       order.subtotal = newSubtotal;
       order.totalAmount = newSubtotal + (order.tax || 0) - (order.discount || 0) + (order.deliveryFee || 0);
@@ -637,7 +637,7 @@ class OrderController {
       if (item) {
         await handleStock([item], 'restore');
         order.items.pull(itemId);
-        
+
         const newSubtotal = order.items.reduce((acc, item) => acc + (item.price * item.quantity), 0);
         order.subtotal = newSubtotal;
         order.totalAmount = newSubtotal + (order.tax || 0) - (order.discount || 0) + (order.deliveryFee || 0);

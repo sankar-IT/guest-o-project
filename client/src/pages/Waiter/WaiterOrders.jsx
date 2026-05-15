@@ -39,6 +39,25 @@ const WaiterOrders = () => {
     ? orders
     : orders.filter(o => o.orderStatus?.toLowerCase() === filter.toLowerCase());
 
+  const handleStatusUpdate = async (e, orderId, currentStatus) => {
+    e.stopPropagation(); // Stop navigation to details
+    
+    // Status cycle: Placed -> Processing -> Delivered
+    let nextStatus = '';
+    if (!currentStatus || currentStatus.toLowerCase() === 'placed') nextStatus = 'Processing';
+    else if (currentStatus.toLowerCase() === 'processing') nextStatus = 'Delivered';
+    else return; // Already Delivered or Cancelled
+
+    try {
+      const response = await api.patch(`/api/orders/${orderId}/status`, { orderStatus: nextStatus });
+      if (response.data.success) {
+        setOrders(orders.map(o => o._id === orderId ? { ...o, orderStatus: nextStatus } : o));
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
+  };
+
   return (
     <div className="waiter-orders-container">
       <header className="dashboard-header">
@@ -86,8 +105,12 @@ const WaiterOrders = () => {
               >
                 <div className="order-card-header">
                   <div className="order-id">#{order.orderNumber}</div>
-                  <div className={`order-status-badge ${(order.orderStatus || '').toLowerCase()}`}>
-                    {(order.orderStatus || '').charAt(0).toUpperCase() + (order.orderStatus || '').slice(1)}
+                  <div 
+                    className={`order-status-badge ${(order.orderStatus || '').toLowerCase()} clickable`}
+                    onClick={(e) => handleStatusUpdate(e, order._id, order.orderStatus)}
+                    title="Click to update status"
+                  >
+                    {(order.orderStatus || 'Placed').charAt(0).toUpperCase() + (order.orderStatus || 'Placed').slice(1)}
                   </div>
                 </div>
                 <div className="order-card-body">

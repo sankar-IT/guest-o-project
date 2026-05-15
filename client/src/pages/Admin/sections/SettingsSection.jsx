@@ -173,7 +173,7 @@ const SettingsSection = () => {
     try {
       const logoUrl = isDarkMode ? 
         (settings?.branding?.logoGold ? (settings.branding.logoGold.startsWith('http') ? settings.branding.logoGold : `${window.location.origin}${settings.branding.logoGold}`) : `${window.location.origin}/logo-golden.png`) : 
-        (settings?.branding?.logoDark ? (settings.branding.logoDark.startsWith('http') ? settings.branding.logoDark : `${window.location.origin}${settings.branding.logoDark}`) : `${window.location.origin}/logo-dark.png`);
+        (settings?.branding?.logoDark ? (settings.branding.logoDark.startsWith('http') ? settings.branding.logoDark : `${window.location.origin}${settings.branding.logoDark}`) : `${window.location.origin}/logo-golden.png`);
 
       const response = await api.post('/api/staff/request-credential-change', {
         currentPassword: securityData.currentPassword,

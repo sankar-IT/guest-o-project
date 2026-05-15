@@ -88,14 +88,14 @@ const MenuSection = React.memo(({ loading, filteredMenus, addToCart, navigate, s
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 animate-fade-in">
             {filteredMenus.map((menu, index) => {
               const variants = menu.variants || menu.sizes || [];
-              const originalPrice = variants.length > 0 
-                ? Math.min(...variants.map(v => v.price)) 
+              const originalPrice = variants.length > 0
+                ? Math.min(...variants.map(v => v.price))
                 : (menu.offerPrice || 0);
 
               // Find active discount offer for this item
               const activeDiscount = offers?.find(o => {
                 if (!o.isActive || o.offerType !== 'discount') return false;
-                
+
                 // Check Schedule
                 const day = new Date().toLocaleDateString('en-US', { weekday: 'long' });
                 if (o.isWeekendOnly && !['Saturday', 'Sunday'].includes(day)) return false;
@@ -104,21 +104,21 @@ const MenuSection = React.memo(({ loading, filteredMenus, addToCart, navigate, s
                 // Check Applicability
                 const isItemMatch = o.applicableItems?.some(bundleItem => (bundleItem.menuItem?._id || bundleItem.menuItem) === menu._id);
                 const isCategoryMatch = o.applicableCategories?.some(cat => (cat._id || cat) === (menu.category?._id || menu.category));
-                
+
                 return isItemMatch || isCategoryMatch;
               });
 
               const isTriggered = activeDiscount && (activeDiscount.minQuantity || 1) <= 1;
               const discountPercent = isTriggered ? activeDiscount.offerValue : 0;
-              const discountedPrice = discountPercent > 0 
-                ? originalPrice * (1 - discountPercent / 100) 
+              const discountedPrice = discountPercent > 0
+                ? originalPrice * (1 - discountPercent / 100)
                 : originalPrice;
 
               return (
                 <div
                   key={`${menu._id}-${index}`}
                   className="bg-background-card rounded-[1.2rem] md:rounded-[1.5rem] overflow-hidden p-3.5 md:p-5 transition-all duration-500 group flex flex-col h-full hover:bg-primary active:bg-primary shadow-[0_4px_15px_rgba(0,0,0,0.02)] hover:shadow-[0_20px_50px_rgba(185,28,28,0.15)] active:shadow-[0_20px_50px_rgba(185,28,28,0.15)] border border-border/10 will-change-transform"
-                  style={{ 
+                  style={{
                     animationDelay: `${(index % 10) * 0.05}s`,
                     willChange: 'transform, box-shadow'
                   }}
@@ -133,8 +133,8 @@ const MenuSection = React.memo(({ loading, filteredMenus, addToCart, navigate, s
                     />
                     {activeDiscount && (
                       <div className="absolute top-2 left-2 bg-primary text-white text-[10px] font-black px-2 py-1 rounded-lg shadow-lg animate-bounce-slow">
-                        {activeDiscount.minQuantity > 1 
-                          ? `BUY ${activeDiscount.minQuantity} GET ${activeDiscount.offerValue}% OFF` 
+                        {activeDiscount.minQuantity > 1
+                          ? `BUY ${activeDiscount.minQuantity} GET ${activeDiscount.offerValue}% OFF`
                           : `${activeDiscount.offerValue}% OFF`}
                       </div>
                     )}
@@ -189,7 +189,8 @@ const MenuSection = React.memo(({ loading, filteredMenus, addToCart, navigate, s
         </div>
       </div>
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes bounce-slow {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-5px); }

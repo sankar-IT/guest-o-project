@@ -25,7 +25,14 @@ const OrderWorkspace = () => {
   const existingOrder = location.state?.existingOrder;
   const isEditing = location.state?.isEditing;
 
-  const { getCartForTable, updateTableCart, addToCart: addToCartContext, updateQuantity: updateQuantityContext } = useCart();
+  const { getCartForTable, updateTableCart, addToTableCart: addToCartContext, updateQuantity: updateQuantityContext, setActiveTableId } = useCart();
+  
+  useEffect(() => {
+    if (tableId) {
+      setActiveTableId(tableId);
+    }
+  }, [tableId, setActiveTableId]);
+
   const tableCartData = getCartForTable(tableId);
   const cart = tableCartData.cart;
 
@@ -49,7 +56,7 @@ const OrderWorkspace = () => {
       const mergedItems = existingOrder.items.reduce((acc, item) => {
         const menuItemId = item.menuItem?._id || item.menuItem;
         const key = `${menuItemId}-${item.size}`;
-        
+
         const existing = acc.find(i => i.id === key);
         if (existing) {
           existing.quantity += item.quantity;
@@ -75,8 +82,8 @@ const OrderWorkspace = () => {
       // or if the cart is currently empty (first load of the edit session)
       if (tableCartData.orderNumber !== existingOrder.orderNumber || tableCartData.cart.length === 0) {
         console.log('DEBUG: Initializing edit cart for order:', existingOrder.orderNumber);
-        updateTableCart(tableId, { 
-          cart: mergedItems, 
+        updateTableCart(tableId, {
+          cart: mergedItems,
           customerCount: existingOrder.customerDetails?.numberOfGuests || tableCartData.customerCount,
           orderNumber: existingOrder.orderNumber
         });
@@ -84,7 +91,7 @@ const OrderWorkspace = () => {
     } else if (!tableCartData.orderNumber) {
       // Initial setup for new order - generate order number if not exists
       console.log('DEBUG: Initializing new order');
-      updateTableCart(tableId, { 
+      updateTableCart(tableId, {
         customerCount: searchParams.get('customers') || tableCartData.customerCount || '1',
         orderNumber: `ORD-${Math.floor(1000 + Math.random() * 9000)}`
       });
@@ -104,13 +111,14 @@ const OrderWorkspace = () => {
       setIsLoading(true);
       try {
         const [menuRes, catRes] = await Promise.all([
-          api.get('/api/menu'),
+          api.get('/api/menus'),
           api.get('/api/categories')
         ]);
-        const items = menuRes.data.data || [];
-        setMenuItems(items);
-        setCategories(catRes.data.data || []);
-        
+        const items = menuRes.data.data || menuRes.data || [];
+        console.log('DEBUG: Fetched menu items:', items);
+        setMenuItems(Array.isArray(items) ? items : []);
+        setCategories(catRes.data.data || catRes.data || []);
+
         // Fetch table details separately to avoid blocking menu if it fails
         try {
           const tableRes = await api.get(`/api/tables/${tableId}`);
@@ -143,12 +151,12 @@ const OrderWorkspace = () => {
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      const itemCategoryName = item.category?.name || '';
+      const itemCategoryName = (typeof item.category === 'object' ? item.category?.name : item.category) || '';
       const matchesCategory = activeCategory === 'All' ||
-        item.foodType === activeCategory.toLowerCase() ||
-        itemCategoryName === activeCategory;
+        (item.foodType && item.foodType.toLowerCase() === activeCategory.toLowerCase()) ||
+        (itemCategoryName && itemCategoryName === activeCategory);
 
-      return matchesSearch && matchesCategory && !item.isBlocked;
+      return matchesSearch && matchesCategory;
     });
   }, [searchQuery, activeCategory, menuItems]);
 
@@ -199,258 +207,265 @@ const OrderWorkspace = () => {
 
   return (
     <div className="order-workspace menu-page">
-        <div className="workspace-grid">
-          {/* Menu Section */}
-          <div className="menu-content-section">
-            <div className="menu-sticky-header">
-              <header className="workspace-header">
-                <div className="header-left">
-                  <button className="back-btn" onClick={() => navigate(`/waiter/tables/${tableId}`)}>
-                    <ArrowLeft size={20} />
-                  </button>
-                  <div className="header-info">
-                    <h1>Table {tableData?.tableNumber || tableNumberFromState || '00'}</h1>
-                    <div className="table-meta">
-                      <span className="order-id-tag">{orderNumber}</span>
-                      <span className="divider"></span>
-                      <Users size={16} />
-                      <span>{customerCount} Customers</span>
-                    </div>
+      <div className="workspace-grid">
+        {/* Menu Section */}
+        <div className="menu-content-section">
+          <div className="menu-sticky-header">
+            <header className="workspace-header">
+              <div className="header-left">
+                <button className="back-btn" onClick={() => navigate(`/waiter/tables/${tableId}`)}>
+                  <ArrowLeft size={20} />
+                </button>
+                <div className="header-info">
+                  <h1>Table {tableData?.tableNumber || tableNumberFromState || '00'}</h1>
+                  <div className="table-meta">
+                    <span className="order-id-tag">{orderNumber}</span>
+                    <span className="divider"></span>
+                    <Users size={16} />
+                    <span>{customerCount} Customers</span>
                   </div>
                 </div>
-                <div className="search-wrapper">
-                  <Search size={18} className="search-icon" />
-                  <input
-                    type="text"
-                    placeholder="Search food, drinks..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <button
-                  className={`mobile-cart-toggle ${cart.length > 0 ? 'has-items' : ''}`}
-                  onClick={() => setIsCartOpen(!isCartOpen)}
-                >
-                  <ShoppingCart size={24} />
-                  {cart.length > 0 && <span className="cart-badge">{cart.reduce((s, i) => s + i.quantity, 0)}</span>}
-                </button>
-              </header>
+              </div>
+              <div className="search-wrapper">
+                <Search size={18} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search food, drinks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <button
+                className={`mobile-cart-toggle ${cart.length > 0 ? 'has-items' : ''}`}
+                onClick={() => setIsCartOpen(!isCartOpen)}
+              >
+                <ShoppingCart size={24} />
+                {cart.length > 0 && <span className="cart-badge">{cart.reduce((s, i) => s + i.quantity, 0)}</span>}
+              </button>
+            </header>
 
-              <nav className="category-tabs no-scrollbar">
-                <button
-                  className={`category-tab ${activeCategory === 'All' ? 'active' : ''}`}
-                  onClick={() => setActiveCategory('All')}
-                >
-                  All
-                </button>
-                <button
-                  className={`category-tab ${activeCategory === 'Veg' ? 'active' : ''}`}
-                  onClick={() => setActiveCategory('Veg')}
-                >
-                  Veg Only
-                </button>
-                <button
-                  className={`category-tab ${activeCategory === 'Non-Veg' ? 'active' : ''}`}
-                  onClick={() => setActiveCategory('Non-Veg')}
-                >
-                  Non-Veg
-                </button>
-                <div className="tab-divider"></div>
-                {categories.filter(c => c.isActive !== false).map(cat => (
-                  <button
-                    key={cat._id}
-                    className={`category-tab ${activeCategory === cat.name ? 'active' : ''}`}
-                    onClick={() => setActiveCategory(cat.name)}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-              </nav>
+            <div className="menu-intro-section">
+              <h2 className="menu-main-title">Our Menu</h2>
+              <p className="menu-quote">
+                "Discover a curated collection of seasonal flavors, meticulously crafted by our chefs to bring the essence of fine dining to your table."
+              </p>
             </div>
 
-            <section className="menu-grid">
-              {filteredItems.length === 0 ? (
-                <div className="empty-menu-state">
-                  <Loader2 className="empty-icon" size={48} />
-                  <h3>No menu items found</h3>
-                  <p>Try adjusting your search or category filters.</p>
-                </div>
-              ) : (
-                filteredItems.map(item => {
-                  const selectedVariant = selectedSizes[item._id] || (item.variants && item.variants[0]);
-                  const displayPrice = item.hasOffer ? item.offerPrice : (selectedVariant?.price || 0);
-                  const isOutOfStock = item.totalStock <= 0;
-
-                  return (
-                    <div key={item._id} className={`menu-card dinesync-card ${isOutOfStock ? 'out-of-stock' : ''}`}>
-                      <div className="item-image-wrapper">
-                        <img
-                          src={item.image ? (item.image.startsWith('http') ? item.image : `http://localhost:5000${item.image}`) : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format'}
-                          alt={item.name}
-                          loading="lazy"
-                        />
-                        <span className={`type-tag ${item.foodType.toLowerCase()}`}>{item.foodType}</span>
-                        {isOutOfStock && <div className="out-of-stock-overlay">Out of Stock</div>}
-                      </div>
-                      <div className="item-details">
-                        <div className="item-header">
-                          <div className="item-title-desc">
-                            <h3>{item.name}</h3>
-                            <p className="item-description-small">{item.description}</p>
-                          </div>
-                          <div className="price-badge-animated">
-                            <span className="price">₹{displayPrice}</span>
-                          </div>
-                        </div>
-
-                        {item.variants && item.variants.length > 0 && (
-                          <div className="item-variants-selector">
-                            <p className="selector-label">Select Size:</p>
-                            <div className="variant-chips-group">
-                              {item.variants.map((v, idx) => {
-                                const isSelected = selectedVariant && selectedVariant.size === v.size;
-                                return (
-                                  <button
-                                    key={idx}
-                                    className={`variant-chip-btn ${isSelected ? 'active' : ''}`}
-                                    onClick={() => handleSizeSelect(item._id, v)}
-                                    disabled={isOutOfStock}
-                                  >
-                                    {v.size}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        <button
-                          className="add-to-cart-btn-modern"
-                          onClick={() => addToCart(item)}
-                          disabled={isOutOfStock}
-                        >
-                          <Plus size={18} />
-                          {isOutOfStock ? 'Sold Out' : 'Add to Cart'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </section>
-
+            <nav className="category-tabs no-scrollbar">
+              <button
+                className={`category-tab ${activeCategory === 'All' ? 'active' : ''}`}
+                onClick={() => setActiveCategory('All')}
+              >
+                All
+              </button>
+              <button
+                className={`category-tab ${activeCategory === 'Veg' ? 'active' : ''}`}
+                onClick={() => setActiveCategory('Veg')}
+              >
+                Veg Only
+              </button>
+              <button
+                className={`category-tab ${activeCategory === 'Non-Veg' ? 'active' : ''}`}
+                onClick={() => setActiveCategory('Non-Veg')}
+              >
+                Non-Veg
+              </button>
+              <div className="tab-divider"></div>
+              {categories.filter(c => c.isActive !== false).map(cat => (
+                <button
+                  key={cat._id}
+                  className={`category-tab ${activeCategory === cat.name ? 'active' : ''}`}
+                  onClick={() => setActiveCategory(cat.name)}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </nav>
           </div>
 
-          {/* Cart Sidebar Section */}
-          <aside className={`cart-sidebar-panel dinesync-card ${isCartOpen ? 'open' : ''}`}>
-            {isCartOpen && (
-              <button className="close-cart-btn" onClick={() => setIsCartOpen(false)}>
-                <ArrowLeft size={24} />
-              </button>
+          <section className="menu-grid">
+            {filteredItems.length === 0 ? (
+              <div className="empty-menu-state">
+                <Loader2 className="empty-icon" size={48} />
+                <h3>No menu items found</h3>
+                <p>Try adjusting your search or category filters.</p>
+              </div>
+            ) : (
+              filteredItems.map(item => {
+                const selectedVariant = selectedSizes[item._id] || (item.variants && item.variants[0]);
+                const displayPrice = item.hasOffer ? item.offerPrice : (selectedVariant?.price || 0);
+                const isOutOfStock = item.totalStock <= 0;
+
+                return (
+                  <div key={item._id} className={`menu-card dinesync-card ${isOutOfStock ? 'out-of-stock' : ''}`}>
+                    <div className="item-image-wrapper">
+                      <img
+                        src={item.image ? (item.image.startsWith('http') ? item.image : `http://localhost:5000${item.image}`) : 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format'}
+                        alt={item.name}
+                        loading="lazy"
+                      />
+                      <span className={`type-tag ${item.foodType.toLowerCase()}`}>{item.foodType}</span>
+                      {isOutOfStock && <div className="out-of-stock-overlay">Out of Stock</div>}
+                    </div>
+                    <div className="item-details">
+                      <div className="item-header">
+                        <div className="item-title-desc">
+                          <h3>{item.name}</h3>
+                          <p className="item-description-small">{item.description}</p>
+                        </div>
+                        <div className="price-badge-animated">
+                          <span className="price">₹{displayPrice}</span>
+                        </div>
+                      </div>
+
+                      {item.variants && item.variants.length > 0 && (
+                        <div className="item-variants-selector">
+                          <p className="selector-label">Select Size:</p>
+                          <div className="variant-chips-group">
+                            {item.variants.map((v, idx) => {
+                              const isSelected = selectedVariant && selectedVariant.size === v.size;
+                              return (
+                                <button
+                                  key={idx}
+                                  className={`variant-chip-btn ${isSelected ? 'active' : ''}`}
+                                  onClick={() => handleSizeSelect(item._id, v)}
+                                  disabled={isOutOfStock}
+                                >
+                                  {v.size}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        className="add-to-cart-btn-modern"
+                        onClick={() => addToCart(item)}
+                        disabled={isOutOfStock}
+                      >
+                        <Plus size={18} />
+                        {isOutOfStock ? 'Sold Out' : 'Add to Cart'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
             )}
-            <div className="cart-header">
-              <div className="cart-title">
-                <ShoppingCart size={22} />
-                <h2>Order Cart</h2>
-              </div>
-              <div className="cart-header-actions">
-                <div className="add-item-shortcut" onClick={() => {
-                  document.querySelector('.search-wrapper input')?.focus();
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}>
-                  <Plus size={16} />
-                  <span>Add Item</span>
-                </div>
-                <span className="item-count-badge">{cart.reduce((s, i) => s + i.quantity, 0)} Items</span>
-              </div>
-            </div>
+          </section>
 
-            <div className="cart-items-scrollable no-scrollbar">
-              {cart.length === 0 ? (
-                <div className="empty-cart-state">
-                  <div className="empty-illustration">
-                    <ShoppingCart size={48} />
-                  </div>
-                  <h3>Your cart is empty</h3>
-                  <p>Browse the menu and add items to your current order</p>
-                </div>
-              ) : (
-                 cart.map(item => (
-                  <div key={item.id} className="cart-item-card">
-                    <div className="item-card-left">
-                      <div className="item-card-image">
-                        <img src={item.image || '/images/salad.png'} alt={item.name} />
-                      </div>
-                      <div className="item-card-details">
-                        <span className="item-name">{item.name}</span>
-                        <div className="item-meta-info">
-                          <span className="item-size-badge">{item.size}</span>
-                          <span className="item-unit-price">₹{item.unitPrice || item.price}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="item-card-right">
-                      <div className="item-price-total">₹{item.totalPrice}</div>
-                      <div className="item-card-actions">
-                        <div className="qty-control-minimal">
-                          <button onClick={() => updateCartQty(item.id, -1)} disabled={item.quantity <= 1}><Minus size={12} /></button>
-                          <span>{item.quantity}</span>
-                          <button onClick={() => updateCartQty(item.id, 1)}><Plus size={12} /></button>
-                        </div>
-                        <button className="delete-item-icon" onClick={() => updateCartQty(item.id, -item.quantity)}>
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="cart-summary-footer">
-              <div className="bill-details">
-                <div className="bill-row">
-                  <span>Subtotal</span>
-                  <span>₹{cartTotal}</span>
-                </div>
-                <div className="bill-row total">
-                  <span>Grand Total</span>
-                  <span>₹{cartTotal}</span>
-                </div>
-              </div>
-              <div className="cart-actions-group">
-                {isEditing && (
-                  <button
-                    className="dinesync-btn dinesync-btn-outline cancel-edit-btn"
-                    onClick={() => navigate(`/waiter/order-details/${tableId}/${existingOrder?._id}`)}
-                  >
-                    Cancel Edit
-                  </button>
-                )}
-                <button
-                  className="dinesync-btn dinesync-btn-primary confirm-order-btn"
-                  disabled={!hasChanges}
-                  onClick={() => {
-                    navigate(`/waiter/order-review/${tableId}`, {
-                      state: {
-                        cart,
-                        customerCount,
-                        orderNumber,
-                        isEditing,
-                        existingOrderId: existingOrder?._id,
-                        tableNumber: tableData?.tableNumber || tableNumberFromState
-                      }
-                    });
-                  }}
-                >
-                  {isEditing ? 'Review Changes' : 'Confirm Order'}
-                  <ChevronRight size={20} />
-                </button>
-              </div>
-            </div>
-          </aside>
         </div>
+
+        {/* Cart Sidebar Section */}
+        <aside className={`cart-sidebar-panel dinesync-card ${isCartOpen ? 'open' : ''}`}>
+          {isCartOpen && (
+            <button className="close-cart-btn" onClick={() => setIsCartOpen(false)}>
+              <ArrowLeft size={24} />
+            </button>
+          )}
+          <div className="cart-header">
+            <div className="cart-title">
+              <ShoppingCart size={22} />
+              <h2>Order Cart</h2>
+            </div>
+            <div className="cart-header-actions">
+              <div className="add-item-shortcut" onClick={() => {
+                document.querySelector('.search-wrapper input')?.focus();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}>
+                <Plus size={16} />
+                <span>Add Item</span>
+              </div>
+              <span className="item-count-badge">{cart.reduce((s, i) => s + i.quantity, 0)} Items</span>
+            </div>
+          </div>
+
+          <div className="cart-items-scrollable no-scrollbar">
+            {cart.length === 0 ? (
+              <div className="empty-cart-state">
+                <div className="empty-illustration">
+                  <ShoppingCart size={48} />
+                </div>
+                <h3>Your cart is empty</h3>
+                <p>Browse the menu and add items to your current order</p>
+              </div>
+            ) : (
+              cart.map(item => (
+                <div key={item.id} className="cart-item-card">
+                  <div className="item-card-left">
+                    <div className="item-card-image">
+                      <img src={item.image || '/images/salad.png'} alt={item.name} />
+                    </div>
+                    <div className="item-card-details">
+                      <span className="item-name">{item.name}</span>
+                      <div className="item-meta-info">
+                        <span className="item-size-badge">{item.size}</span>
+                        <span className="item-unit-price">₹{item.unitPrice || item.price}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="item-card-right">
+                    <div className="item-price-total">₹{item.totalPrice}</div>
+                    <div className="item-card-actions">
+                      <div className="qty-control-minimal">
+                        <button onClick={() => updateCartQty(item.id, -1)} disabled={item.quantity <= 1}><Minus size={12} /></button>
+                        <span>{item.quantity}</span>
+                        <button onClick={() => updateCartQty(item.id, 1)}><Plus size={12} /></button>
+                      </div>
+                      <button className="delete-item-icon" onClick={() => updateCartQty(item.id, -item.quantity)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="cart-summary-footer">
+            <div className="bill-details">
+              <div className="bill-row">
+                <span>Subtotal</span>
+                <span>₹{cartTotal}</span>
+              </div>
+              <div className="bill-row total">
+                <span>Grand Total</span>
+                <span>₹{cartTotal}</span>
+              </div>
+            </div>
+            <div className="cart-actions-group">
+              {isEditing && (
+                <button
+                  className="dinesync-btn dinesync-btn-outline cancel-edit-btn"
+                  onClick={() => navigate(`/waiter/order-details/${tableId}/${existingOrder?._id}`)}
+                >
+                  Cancel Edit
+                </button>
+              )}
+              <button
+                className="dinesync-btn dinesync-btn-primary confirm-order-btn"
+                disabled={!hasChanges}
+                onClick={() => {
+                  navigate(`/waiter/order-review/${tableId}`, {
+                    state: {
+                      cart,
+                      customerCount,
+                      orderNumber,
+                      isEditing,
+                      existingOrderId: existingOrder?._id,
+                      tableNumber: tableData?.tableNumber || tableNumberFromState
+                    }
+                  });
+                }}
+              >
+                {isEditing ? 'Review Changes' : 'Confirm Order'}
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 };

@@ -4,6 +4,9 @@ import { getSettings, updateSettings } from '../controllers/settingsController.j
 const router = express.Router();
 
 router.get('/', getSettings);
-router.patch('/', updateSettings); // Using PATCH for partial updates
+router.get('/status', (req, res, next) => {
+  import('../controllers/settingsController.js').then(ctrl => ctrl.getStoreStatus(req, res)).catch(next);
+});
+router.patch('/', updateSettings);
 
 export default router;

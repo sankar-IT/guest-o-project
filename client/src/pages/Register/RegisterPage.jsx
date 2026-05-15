@@ -11,7 +11,7 @@ const RegisterPage = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const { settings } = useCart();
-  const logoSrc = theme === 'dark' ? (settings?.branding?.logoGold || "/logo-golden.png") : (settings?.branding?.logoDark || "/logo-dark.png");
+  const logoSrc = theme === 'dark' ? (settings?.branding?.logoGold || "/logo-golden.png") : (settings?.branding?.logoDark || "/logo-golden.png");
 
   const [fields, setFields] = useState({
     name: '',

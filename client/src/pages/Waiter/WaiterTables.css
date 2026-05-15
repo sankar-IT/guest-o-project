@@ -17,6 +17,46 @@
   margin: 0;
 }
 
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem 2rem;
+  background: #f8f9fa;
+  border-top: 1px solid var(--border);
+}
+
+.modal-footer .dinesync-btn-primary {
+  background: #000000 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 10px 24px !important;
+  font-weight: 600 !important;
+  transition: all 0.3s ease !important;
+}
+
+.modal-footer .dinesync-btn-primary:hover:not(:disabled) {
+  background: #1a1a1a !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+}
+
+.modal-footer .dinesync-btn-secondary {
+  background: white !important;
+  color: #000000 !important;
+  border: 1px solid #000000 !important;
+  border-radius: 10px !important;
+  padding: 10px 24px !important;
+  font-weight: 600 !important;
+  transition: all 0.3s ease !important;
+}
+
+.modal-footer .dinesync-btn-secondary:hover {
+  background: #f8f9fa !important;
+  transform: translateY(-2px);
+}
+
 .title-row {
   display: flex;
   align-items: center;
@@ -51,6 +91,34 @@
 .header-actions {
   display: flex;
   gap: 1rem;
+}
+
+/* Black Square Style for Add Table button */
+.header-actions .dinesync-btn-secondary {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 10px 24px !important;
+  font-weight: 600 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+  cursor: pointer;
+}
+
+.header-actions .dinesync-btn-secondary:hover {
+  background: #1a1a1a !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+}
+
+.header-actions .dinesync-btn-secondary svg {
+  order: 2; /* Icon on the right to match reference */
+  width: 18px;
+  height: 18px;
 }
 
 .dashboard-controls {
@@ -119,33 +187,39 @@
 
 .tables-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.25rem;
 }
 
 @media (max-width: 1024px) {
   .mobile-menu-btn {
     display: flex;
   }
+
   .tables-grid {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 1.25rem;
   }
+
   .dashboard-header {
     flex-direction: column;
     gap: 1.5rem;
   }
+
   .header-actions {
     width: 100%;
   }
+
   .dashboard-controls {
     flex-direction: column;
     align-items: stretch;
     gap: 1.25rem;
   }
+
   .search-bar {
     max-width: none;
   }
+
   .filter-chips {
     overflow-x: auto;
     padding-bottom: 0.75rem;
@@ -155,9 +229,11 @@
     padding-right: 1rem;
     scrollbar-width: none;
   }
+
   .filter-chips::-webkit-scrollbar {
     display: none;
   }
+
   .filter-chip {
     white-space: nowrap;
   }
@@ -179,6 +255,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 0.75rem;
   }
+
   .filter-chip {
     padding: 0.5rem 1.25rem;
     font-size: 0.875rem;
@@ -233,24 +310,25 @@
 
 .cap-btn {
   height: 48px;
-  border-radius: var(--radius-dinesync);
-  border: 1px solid var(--color-border-light);
-  background: var(--color-background-card);
-  color: var(--color-text-secondary);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text-secondary);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .cap-btn:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: #000000;
+  color: #000000;
 }
 
 .cap-btn.active {
-  background: var(--color-primary);
+  background: #000000;
   color: white;
-  border-color: var(--color-primary);
+  border-color: #000000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .custom-cap input {
@@ -272,6 +350,13 @@
 }
 
 @keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }

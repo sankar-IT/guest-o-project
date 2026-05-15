@@ -26,7 +26,7 @@ const LoginPage = () => {
   const [showResetModal, setShowResetModal] = useState(false);
   const { theme } = useTheme();
   const { settings } = useCart();
-  const logoSrc = theme === 'dark' ? (settings?.branding?.logoGold || "/logo-golden.png") : (settings?.branding?.logoDark || "/logo-dark.png");
+  const logoSrc = theme === 'dark' ? (settings?.branding?.logoGold || "/logo-golden.png") : (settings?.branding?.logoDark || "/logo-golden.png");
 
   React.useEffect(() => {
     const token = localStorage.getItem('token');

@@ -337,7 +337,7 @@ const KitchenDashboard = () => {
               src={
                 (isSidebarCollapsed && !isMobileMenuOpen)
                   ? '/browser-icon.png'
-                  : (isDarkMode ? (settings?.branding?.logoGold || '/logo-golden.png') : (settings?.branding?.logoDark || '/logo-dark.png'))
+                  : (isDarkMode ? (settings?.branding?.logoGold || '/logo-golden.png') : (settings?.branding?.logoDark || '/logo-golden.png'))
               }
               alt="Logo"
               className={`${(isSidebarCollapsed && !isMobileMenuOpen) ? 'h-8' : 'h-10'} w-auto transition-all duration-500`}

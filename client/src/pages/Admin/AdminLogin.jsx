@@ -77,7 +77,7 @@ const AdminLogin = () => {
         <img 
           src={isDarkMode 
             ? (settings?.branding?.logoGold || "/logo-golden.png") 
-            : (settings?.branding?.logoDark || "/logo-dark.png")} 
+            : (settings?.branding?.logoDark || "/logo-golden.png")} 
           alt="Restaurant Logo" 
           className="h-16 w-auto mb-2" 
         />

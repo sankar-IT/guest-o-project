@@ -20,22 +20,42 @@ export const CartProvider = ({ children }) => {
   });
   const [appliedOffer, setAppliedOffer] = useState(null);
   const [storeStatus, setStoreStatus] = useState({ isOpen: true, message: '' });
+  const [settings, setSettings] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('cartItems', JSON.stringify(cartItems));
   }, [cartItems]);
 
+  const fetchSettings = useCallback(async () => {
+    try {
+      const { data } = await api.get('/api/settings');
+      if (data.success) {
+        setSettings(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+    }
+  }, []);
+
   const checkStoreStatus = useCallback(async () => {
     try {
       const { data } = await api.get('/api/settings/status');
-      setStoreStatus(data.data);
-      return data.data.isOpen;
+      if (data.success) {
+        setStoreStatus(data.data);
+        return data.data.isOpen;
+      }
+      return true;
     } catch (error) {
       console.error('Error checking store status:', error);
       return true;
     }
   }, []);
+
+  useEffect(() => {
+    fetchSettings();
+    checkStoreStatus();
+  }, [fetchSettings, checkStoreStatus]);
 
   const addToCart = useCallback((item, variant) => {
     setCartItems(prev => {
@@ -89,51 +109,96 @@ export const CartProvider = ({ children }) => {
 
   const addToTableCart = useCallback((tableId, item, variant) => {
     setTableCarts(prev => {
-      const currentCart = prev[tableId] || [];
-      const existingIndex = currentCart.findIndex(i => i.menuItem === item._id && i.size === variant.size);
+      const tableData = prev[tableId] || { cart: [], customerCount: '1', orderNumber: null };
+      const currentCart = tableData.cart || [];
       
-      let newItems;
+      const itemToMatch = {
+        menuItem: item._id || item.menuItem,
+        size: variant?.size || item.size || 'Standard'
+      };
+
+      const existingIndex = currentCart.findIndex(i => 
+        i.menuItem === itemToMatch.menuItem && i.size === itemToMatch.size
+      );
+
+      let newCart;
       if (existingIndex > -1) {
-        newItems = [...currentCart];
-        newItems[existingIndex].quantity += 1;
-        newItems[existingIndex].totalPrice = newItems[existingIndex].quantity * newItems[existingIndex].unitPrice;
+        newCart = currentCart.map((cartItem, idx) => {
+          if (idx === existingIndex) {
+            const newQty = cartItem.quantity + 1;
+            return {
+              ...cartItem,
+              quantity: newQty,
+              totalPrice: newQty * (cartItem.unitPrice || cartItem.price)
+            };
+          }
+          return cartItem;
+        });
       } else {
-        newItems = [...currentCart, {
-          menuItem: item._id,
+        const price = variant?.price || item.unitPrice || item.price || 0;
+        const newItem = {
+          id: `${itemToMatch.menuItem}-${itemToMatch.size}`,
+          menuItem: itemToMatch.menuItem,
           name: item.name,
           image: item.image || '',
-          size: variant.size || 'Standard',
+          size: itemToMatch.size,
           quantity: 1,
-          unitPrice: variant.price,
-          totalPrice: variant.price,
+          unitPrice: price,
+          price: price,
+          totalPrice: price,
           foodType: item.foodType
-        }];
+        };
+        newCart = [...currentCart, newItem];
       }
-      return { ...prev, [tableId]: newItems };
+      return { ...prev, [tableId]: { ...tableData, cart: newCart } };
     });
   }, []);
+
+  const updateTableCart = useCallback((tableId, data) => {
+    setTableCarts(prev => {
+      const current = prev[tableId] || { cart: [], customerCount: '1', orderNumber: null };
+      return {
+        ...prev,
+        [tableId]: { ...current, ...data }
+      };
+    });
+  }, []);
+
+  const getCartForTable = useCallback((tableId) => {
+    const data = tableCarts[tableId] || { cart: [], customerCount: '1', orderNumber: null };
+    return data;
+  }, [tableCarts]);
 
   const removeFromTableCart = useCallback((tableId, index) => {
     setTableCarts(prev => {
-      const currentCart = prev[tableId] || [];
-      const newItems = currentCart.filter((_, i) => i !== index);
-      const newCarts = { ...prev, [tableId]: newItems };
-      if (newItems.length === 0) delete newCarts[tableId];
-      return newCarts;
+      const tableData = prev[tableId] || { cart: [] };
+      const newItems = (tableData.cart || []).filter((_, i) => i !== index);
+      return { ...prev, [tableId]: { ...tableData, cart: newItems } };
     });
   }, []);
 
-  const updateTableCartQuantity = useCallback((tableId, index, delta) => {
+  const updateTableCartQuantity = useCallback((tableId, itemId, delta) => {
     setTableCarts(prev => {
-      const currentCart = [...(prev[tableId] || [])];
-      if (!currentCart[index]) return prev;
+      const tableData = prev[tableId] || { cart: [] };
+      const currentCart = [...(tableData.cart || [])];
+      const index = currentCart.findIndex(i => i.id === itemId);
       
+      if (index === -1) return prev;
+
+      const newQuantity = currentCart[index].quantity + delta;
+      
+      if (newQuantity <= 0) {
+        // Remove item if quantity is 0 or less
+        const newCart = currentCart.filter((_, i) => i !== index);
+        return { ...prev, [tableId]: { ...tableData, cart: newCart } };
+      }
+
       const item = { ...currentCart[index] };
-      item.quantity = Math.max(1, item.quantity + delta);
-      item.totalPrice = item.quantity * item.unitPrice;
+      item.quantity = newQuantity;
+      item.totalPrice = item.quantity * (item.unitPrice || item.price);
       currentCart[index] = item;
-      
-      return { ...prev, [tableId]: currentCart };
+
+      return { ...prev, [tableId]: { ...tableData, cart: currentCart } };
     });
   }, []);
 
@@ -152,9 +217,9 @@ export const CartProvider = ({ children }) => {
   // ---------------------------------------------------------
   // 3. Totals & Offers Logic (merged)
   // ---------------------------------------------------------
-  const cartSubtotal = useMemo(() => 
-    cartItems.reduce((acc, i) => acc + (i.price * i.quantity), 0), 
-  [cartItems]);
+  const cartSubtotal = useMemo(() =>
+    cartItems.reduce((acc, i) => acc + (i.price * i.quantity), 0),
+    [cartItems]);
 
   const value = {
     // Online Cart
@@ -165,15 +230,20 @@ export const CartProvider = ({ children }) => {
     clearCart,
     cartSubtotal,
     storeStatus,
+    settings,
     checkStoreStatus,
+    fetchSettings,
 
     // Waiter Cart
     tableCarts,
     addToTableCart,
     removeFromTableCart,
     updateTableCartQuantity,
+    updateQuantity: updateTableCartQuantity, // Alias for waiter pages
     clearTableCart,
     getTableCart,
+    getCartForTable,
+    updateTableCart,
     activeTableId,
     setActiveTableId
   };

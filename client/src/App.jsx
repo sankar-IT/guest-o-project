@@ -72,6 +72,7 @@ function App() {
                   <Route path="order/:tableId" element={<OrderWorkspace />} />
                   <Route path="order" element={<OrderWorkspace />} />
                   <Route path="menu" element={<MenuPage />} />
+                  <Route path="product/:id" element={<ProductDetailPage />} />
                 </Route>
 
                 {/* Staff Routes */}

@@ -71,7 +71,7 @@ const StaffLogin = () => {
       {/* Logo */}
       <div className="mb-10 text-center flex flex-col items-center animate-in fade-in slide-in-from-top-4 duration-700">
         <img
-          src={isDarkMode ? (settings?.branding?.logoGold || '/logo-golden.png') : (settings?.branding?.logoDark || '/logo-dark.png')}
+          src={isDarkMode ? (settings?.branding?.logoGold || '/logo-golden.png') : (settings?.branding?.logoDark || '/logo-golden.png')}
           alt="Restaurant Logo"
           className="h-16 w-auto mb-4"
         />

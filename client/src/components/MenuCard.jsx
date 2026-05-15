@@ -1,9 +1,13 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 const MenuCard = ({ id, title, description, price, image, tags, sizes }) => {
+  const location = useLocation();
+  const isWaiter = location.pathname.startsWith('/waiter');
+  const productLink = isWaiter ? `/waiter/product/${id}` : `/product/${id}`;
+
   return (
-    <Link to={`/product/${id}`} className="menu-card group block">
+    <Link to={productLink} className="menu-card group block">
       <div className="menu-card-image-container">
         <img src={image} alt={title} className="menu-card-image" />
         {tags && (
@@ -33,7 +37,6 @@ const MenuCard = ({ id, title, description, price, image, tags, sizes }) => {
           </div>
         )}
 
-        <p className="menu-card-description">{description}</p>
         <button className="add-to-cart-btn">View Details</button>
       </div>
     </Link>

@@ -1,6 +1,7 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import Order from '../models/orderSchema.js';
+import { getIO } from '../socket.js';
 
 const createRazorpayOrder = async (req, res) => {
   try {
@@ -74,9 +75,17 @@ const verifyPayment = async (req, res) => {
       }
 
       order.paymentStatus = 'paid';
+      order.paymentMethod = 'online';
       order.razorpayOrderId = razorpay_order_id;
       order.razorpayPaymentId = razorpay_payment_id;
       await order.save();
+      
+      // Notify Admin after payment success
+      getIO().emit('newOrder', {
+        order: order,
+        message: `🔔 New ${order.orderType.toUpperCase()} Order Received! (#${order.orderNumber})`
+      });
+      getIO().emit('ordersUpdated');
 
       res.status(200).json({
         success: true,

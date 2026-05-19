@@ -5,13 +5,22 @@ class MenuRepository {
     return await Menu.create(data);
   }
 
-  async getAll(filter = {}, skip = 0, limit = 0) {
+  async getAll(filter = {}, skip = 0, limit = 0, sortOption = { createdAt: -1 }) {
     let query = Menu.find({ isBlocked: false, ...filter })
       .populate('category')
       .populate({
         path: 'variants.includedItems.menuItem',
         select: 'name'
-      });
+      })
+      .populate({
+        path: 'variants.bogoItem',
+        select: 'name image'
+      })
+      .populate({
+        path: 'comboItems.menuItem',
+        select: 'name variants'
+      })
+      .sort(sortOption);
     if (skip > 0) query = query.skip(skip);
     if (limit > 0) query = query.limit(limit);
     return await query;
@@ -24,6 +33,14 @@ class MenuRepository {
         path: 'variants.includedItems.menuItem',
         select: 'name'
       })
+      .populate({
+        path: 'variants.bogoItem',
+        select: 'name image'
+      })
+      .populate({
+        path: 'comboItems.menuItem',
+        select: 'name variants'
+      })
       .sort({ createdAt: -1 });
   }
 
@@ -33,6 +50,14 @@ class MenuRepository {
       .populate({
         path: 'variants.includedItems.menuItem',
         select: 'name'
+      })
+      .populate({
+        path: 'variants.bogoItem',
+        select: 'name image'
+      })
+      .populate({
+        path: 'comboItems.menuItem',
+        select: 'name variants'
       });
   }
 
@@ -42,6 +67,14 @@ class MenuRepository {
       .populate({
         path: 'variants.includedItems.menuItem',
         select: 'name'
+      })
+      .populate({
+        path: 'variants.bogoItem',
+        select: 'name image'
+      })
+      .populate({
+        path: 'comboItems.menuItem',
+        select: 'name variants'
       });
   }
 

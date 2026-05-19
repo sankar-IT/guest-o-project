@@ -11,6 +11,8 @@ import MenuSection from '../../components/Menu/MenuSection';
 import MenuModal from '../../components/Menu/MenuModal';
 import { useCart } from '../../context/CartContext';
 import Loader from '../../components/Loader/Loader';
+import OffersCarousel from '../../components/Offers/OffersCarousel';
+import StoreStatusBanner from '../../components/StoreStatus/StoreStatusBanner';
 
 const heroImages = ['/heroSection/hero1.png', '/heroSection/hero2.png', '/heroSection/hero3.png', '/heroSection/hero4.png', '/heroSection/hero5.png'];
 
@@ -21,6 +23,8 @@ const LandingPage = () => {
   const [categories, setCategories] = useState([]);
   const [trendingItems, setTrendingItems] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [bogoOnly, setBogoOnly] = useState(false);
+  const [comboOnly, setComboOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -39,6 +43,8 @@ const LandingPage = () => {
     if (token) {
       navigate('/home', { replace: true });
     }
+    // If it's an admin, we don't redirect them away from landing page
+    // but they can still see the dashboard link in Navbar
   }, [navigate]);
 
   useEffect(() => {
@@ -87,7 +93,9 @@ const LandingPage = () => {
           category: selectedCategory !== 'all' ? selectedCategory : undefined,
           search: debouncedSearchQuery || undefined,
           foodType: dietaryFilter !== 'all' ? dietaryFilter : undefined,
-          sort: sortBy !== 'default' ? sortBy : undefined
+          sort: sortBy !== 'default' ? sortBy : undefined,
+          bogo: bogoOnly ? 'true' : undefined,
+          combo: comboOnly ? 'true' : undefined
         }
       });
 
@@ -105,11 +113,11 @@ const LandingPage = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [selectedCategory, searchQuery, dietaryFilter, sortBy]);
+  }, [selectedCategory, searchQuery, dietaryFilter, sortBy, bogoOnly, comboOnly]);
 
   useEffect(() => {
     fetchMenus(1, true);
-  }, [selectedCategory, searchQuery, dietaryFilter, sortBy]);
+  }, [selectedCategory, searchQuery, dietaryFilter, sortBy, bogoOnly, comboOnly]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -130,6 +138,24 @@ const LandingPage = () => {
 
   const handleCategoryChange = (categoryId) => {
     setSelectedCategory(categoryId);
+    setBogoOnly(false);
+    setComboOnly(false);
+    setPage(1);
+    setHasMore(true);
+  };
+
+  const handleBogoFilter = () => {
+    setSelectedCategory('all');
+    setBogoOnly(true);
+    setComboOnly(false);
+    setPage(1);
+    setHasMore(true);
+  };
+
+  const handleComboFilter = () => {
+    setSelectedCategory('all');
+    setBogoOnly(false);
+    setComboOnly(true);
     setPage(1);
     setHasMore(true);
   };
@@ -145,7 +171,7 @@ const LandingPage = () => {
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const dropdownRef = useRef(null);
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  const user = JSON.parse(localStorage.getItem('user') || localStorage.getItem('admin_user') || 'null');
   const { cartItems } = useCart();
 
   useEffect(() => {
@@ -159,9 +185,16 @@ const LandingPage = () => {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login', { replace: true });
+    const isAdmin = !!localStorage.getItem('admin_token');
+    if (localStorage.getItem('user')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/login', { replace: true });
+    } else {
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+      navigate('/admin/login', { replace: true });
+    }
   };
 
   if (loading && menus.length === 0 && categories.length === 0) {
@@ -191,6 +224,26 @@ const LandingPage = () => {
         />
       </div>
 
+      <OffersCarousel
+        onOfferClick={(offer) => {
+          if (offer.offerType === 'bogo') {
+            handleBogoFilter();
+          } else if (offer.offerType === 'combo') {
+            handleComboFilter();
+          } else if (offer.applicableCategories?.length > 0) {
+            handleCategoryChange(offer.applicableCategories[0]._id);
+          } else {
+            setSelectedCategory('all');
+            setBogoOnly(false);
+            setComboOnly(false);
+          }
+          const menuElement = document.getElementById('menu');
+          if (menuElement) {
+            menuElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }}
+      />
+
       <div className="relative z-10 bg-background rounded-t-[3rem] -mt-12 md:-mt-20">
         <main className="max-w-7xl mx-auto px-6 py-0">
           <CategorySection
@@ -217,6 +270,20 @@ const LandingPage = () => {
               observerTarget={observerTarget}
               hasMore={hasMore}
               loadingMore={loadingMore}
+              bogoOnly={bogoOnly}
+              comboOnly={comboOnly}
+              selectedCategory={selectedCategory}
+              searchQuery={searchQuery}
+              onClearAll={() => {
+                setSelectedCategory('all');
+                setBogoOnly(false);
+                setComboOnly(false);
+                setSortBy('default');
+                setDietaryFilter('all');
+                setSearchQuery('');
+                setPage(1);
+                setHasMore(true);
+              }}
               onAddClick={(menu) => {
                 setSelectedMenu(menu);
                 setIsModalOpen(true);
@@ -234,6 +301,7 @@ const LandingPage = () => {
         menu={selectedMenu}
         onAction={handlePublicAction}
       />
+      <StoreStatusBanner />
     </div>
   );
 };

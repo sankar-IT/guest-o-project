@@ -4,7 +4,7 @@ import User from '../models/userSchema.js';
 import Counter from '../models/counterSchema.js';
 import Menu from '../models/menuSchema.js';
 import Settings from '../models/settingsSchema.js';
-import { getIO } from '../socket.js';
+import { getIO, emitStockUpdate } from '../socket.js';
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371; // km
@@ -115,13 +115,17 @@ const handleStock = async (items, type = 'reduce') => {
       const updatedMenu = await Menu.findByIdAndUpdate(
         item.menuItem,
         { $inc: { totalStock: factor * amount } },
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       // Force floor at 0 if it somehow went negative
       if (updatedMenu && updatedMenu.totalStock < 0) {
         await Menu.findByIdAndUpdate(item.menuItem, { totalStock: 0 });
         updatedMenu.totalStock = 0;
+      }
+
+      if (updatedMenu) {
+        emitStockUpdate(updatedMenu._id, updatedMenu.totalStock);
       }
 
       // Real-time Stock Alerts (Only on reduction)
@@ -150,12 +154,16 @@ const handleStock = async (items, type = 'reduce') => {
           const updatedIncluded = await Menu.findByIdAndUpdate(
             included.menuItem,
             { $inc: { totalStock: factor * includedReduction } },
-            { new: true }
+            { returnDocument: 'after' }
           );
 
           if (updatedIncluded && updatedIncluded.totalStock < 0) {
             await Menu.findByIdAndUpdate(included.menuItem, { totalStock: 0 });
             updatedIncluded.totalStock = 0;
+          }
+
+          if (updatedIncluded) {
+            emitStockUpdate(updatedIncluded._id, updatedIncluded.totalStock);
           }
 
           // Stock Alerts for included items
@@ -205,7 +213,7 @@ class OrderController {
       if (paymentMethod === 'wallet') {
         const user = await User.findById(req.user._id);
         const orderTotal = totalAmount; // totalAmount should already include fee/tax/discount
-        
+
         if (user.walletBalance < orderTotal) {
           return res.status(400).json({ success: false, message: 'Insufficient wallet balance' });
         }
@@ -268,7 +276,8 @@ class OrderController {
             unitPrice: item.price,
             costPrice: variant?.costPrice || 0,
             totalPrice: item.price * item.quantity,
-            kitchenStatus: 'placed'
+            kitchenStatus: 'placed',
+            bogoItem: item.bogoItem || null
           };
         })),
         customerDetails: {
@@ -292,7 +301,7 @@ class OrderController {
         totalAmount: subtotal + (deliveryFee || req.body.deliveryFee || 0) - (discount || 0) + (tax || 0),
         orderStatus: 'placed',
         kitchenStatus: 'placed',
-        paymentStatus: (paymentMethod === 'wallet') ? 'paid' : 'pending',
+        paymentStatus: (paymentMethod === 'wallet') ? 'paid' : 'unpaid',
         razorpayOrderId,
         razorpayPaymentId
       });
@@ -325,11 +334,14 @@ class OrderController {
         data: newOrder
       });
 
-      // Global Notification
-      getIO().emit('newOrder', {
-        order: newOrder,
-        message: `🔔 New ${newOrder.orderType.toUpperCase()} Order Received! (#${newOrder.orderNumber})`
-      });
+      // Global Notification (Only for COD/Wallet. Online orders wait for payment verification)
+      const onlineMethods = ['online', 'upi/card', 'razorpay'];
+      if (!onlineMethods.includes(newOrder.paymentMethod)) {
+        getIO().emit('newOrder', {
+          order: newOrder,
+          message: `🔔 New ${newOrder.orderType.toUpperCase()} Order Received! (#${newOrder.orderNumber})`
+        });
+      }
     } catch (error) {
       console.error('Order Error Details:', error);
       res.status(500).json({
@@ -366,10 +378,17 @@ class OrderController {
         return res.status(404).json({ success: false, message: 'Order not found' });
       }
 
-      if (order.orderStatus !== 'placed') {
+      if (order.orderStatus !== 'placed' && order.orderStatus !== 'processing') {
         return res.status(400).json({
           success: false,
-          message: `Only newly placed orders can be cancelled. Current status: ${order.orderStatus}`
+          message: `This order is too far along to be cancelled. Status: ${order.orderStatus}`
+        });
+      }
+
+      if (order.kitchenStatus !== 'placed') {
+        return res.status(400).json({
+          success: false,
+          message: `The kitchen has already started preparing your meal. It can no longer be cancelled.`
         });
       }
 
@@ -394,8 +413,8 @@ class OrderController {
 
       res.status(200).json({
         success: true,
-        message: order.paymentStatus === 'refunded' 
-          ? 'Order cancelled and amount refunded to your wallet' 
+        message: order.paymentStatus === 'refunded'
+          ? 'Order cancelled and amount refunded to your wallet'
           : 'Order cancelled successfully'
       });
     } catch (error) {
@@ -420,8 +439,8 @@ class OrderController {
 
       const orderNumber = await getNextOrderNumber();
 
-      let paymentStatus = 'pending';
-      if (paymentMethod === 'cash' && cashReceived >= totalAmount) {
+      let paymentStatus = req.body.paymentStatus || 'unpaid';
+      if ((paymentMethod === 'cash' || paymentMethod === 'upi/card') && cashReceived >= totalAmount) {
         paymentStatus = 'paid';
       }
 
@@ -429,7 +448,7 @@ class OrderController {
         orderNumber,
         orderType: orderType || 'takeaway',
         orderSource: 'admin',
-        orderStatus: 'placed',
+        orderStatus: orderType === 'dine-in' ? 'placed' : 'processing',
         customerDetails: {
           name: customerDetails?.name || 'Walk-in',
           phone: customerDetails?.phone,
@@ -444,7 +463,8 @@ class OrderController {
             name: menuDoc?.name || item.name,
             image: menuDoc?.image || item.image,
             costPrice: variant?.costPrice || 0,
-            kitchenStatus: 'placed'
+            kitchenStatus: 'placed',
+            bogoItem: item.bogoItem || null
           };
         })),
         subtotal,
@@ -458,11 +478,15 @@ class OrderController {
         paymentStatus
       });
 
+      if (orderType === 'dine-in' && req.body.tableId) {
+        newOrder.table = req.body.tableId;
+      }
+
       await newOrder.save();
       await handleStock(items, 'reduce');
 
       res.status(201).json({ success: true, data: newOrder });
-      
+
       getIO().emit('newOrder', {
         order: newOrder,
         message: `🔔 New ${newOrder.orderType.toUpperCase()} Order Received! (#${newOrder.orderNumber})`
@@ -477,6 +501,15 @@ class OrderController {
     try {
       const { type } = req.query;
       const query = type ? { orderType: type } : {};
+
+      // Filter: Show successful payments, COD/Cash orders, OR ANY Dine-In order
+      // This allows active tables to be visible while still hiding failed/unpaid online/delivery orders
+      query.$or = [
+        { paymentStatus: 'paid' },
+        { paymentMethod: { $in: ['cod', 'cash'] } },
+        { orderType: 'dine-in' }
+      ];
+
       const orders = await Order.find(query)
         .populate('items.menuItem', 'name image')
         .populate('table', 'tableNumber')
@@ -497,15 +530,15 @@ class OrderController {
 
       // Operational Rule
       if (
-        originalOrder.orderStatus === 'processing' && 
-        updateData.orderStatus && 
-        updateData.orderStatus !== 'processing' && 
-        updateData.orderStatus !== 'cancelled' && 
+        originalOrder.orderStatus === 'processing' &&
+        updateData.orderStatus &&
+        updateData.orderStatus !== 'processing' &&
+        updateData.orderStatus !== 'cancelled' &&
         originalOrder.kitchenStatus !== 'ready'
       ) {
-        return res.status(403).json({ 
-          success: false, 
-          message: 'Order status cannot be updated until the Kitchen marks all items as "Ready".' 
+        return res.status(403).json({
+          success: false,
+          message: 'Order status cannot be updated until the Kitchen marks all items as "Ready".'
         });
       }
 
@@ -513,11 +546,18 @@ class OrderController {
         await restoreStock(originalOrder.items);
       }
 
+      // Auto-mark as paid when delivered
+      if (updateData.orderStatus === 'delivered') {
+        updateData.paymentStatus = 'paid';
+        updateData.paidAmount = updateData.totalAmount ?? originalOrder.totalAmount;
+      }
+
       if (updateData.cashReceived !== undefined || updateData.totalAmount !== undefined) {
         const cash = updateData.cashReceived ?? originalOrder.cashReceived;
         const total = updateData.totalAmount ?? originalOrder.totalAmount;
         if (originalOrder.paymentMethod === 'cash' && cash >= total && total > 0) {
           updateData.paymentStatus = 'paid';
+          updateData.paidAmount = total;
         }
       }
 
@@ -526,6 +566,14 @@ class OrderController {
       }
 
       Object.assign(originalOrder, updateData);
+
+      if (!["cash", "upi/card", "online", "cod", "wallet", "Not Specified"].includes(originalOrder.paymentMethod)) {
+        originalOrder.paymentMethod = 'Not Specified';
+      }
+      if (!["paid", "unpaid", "refunded"].includes(originalOrder.paymentStatus)) {
+        originalOrder.paymentStatus = 'unpaid';
+      }
+
       const order = await originalOrder.save();
       await order.populate([
         { path: 'items.menuItem', select: 'name image' },
@@ -608,12 +656,12 @@ class OrderController {
       const enrichedItems = await Promise.all(items.map(async item => {
         const menuDoc = await Menu.findById(item.menuItem);
         const variant = menuDoc?.variants?.find(v => v.size === item.size);
-        return { 
-          ...item, 
+        return {
+          ...item,
           name: menuDoc?.name || item.name,
           image: menuDoc?.image || item.image,
           costPrice: variant?.costPrice || 0,
-          kitchenStatus: 'placed' 
+          kitchenStatus: 'placed'
         };
       }));
       order.items.push(...enrichedItems);
@@ -703,11 +751,6 @@ class OrderController {
       const { id } = req.params;
       const { items } = req.body;
 
-      const stockCheck = await checkStockAvailability(items);
-      if (!stockCheck.available) {
-        return res.status(400).json({ success: false, message: `Insufficient stock for: ${stockCheck.itemName}` });
-      }
-
       const order = await Order.findById(id);
       if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
@@ -716,20 +759,56 @@ class OrderController {
       }
 
       await restoreStock(order.items);
+
+      const stockCheck = await checkStockAvailability(items);
+      if (!stockCheck.available) {
+        await handleStock(order.items, 'reduce');
+        return res.status(400).json({ success: false, message: `Insufficient stock for: ${stockCheck.itemName}` });
+      }
       order.items = await Promise.all(items.map(async item => {
         const menuDoc = await Menu.findById(item.menuItem);
         const variant = menuDoc?.variants?.find(v => v.size === item.size);
+        const unitPrice = item.unitPrice || item.price || variant?.price || 0;
+        const quantity = item.quantity || 1;
         return {
           ...item,
           name: menuDoc?.name || item.name,
           image: menuDoc?.image || item.image,
+          unitPrice,
+          price: unitPrice,
           costPrice: variant?.costPrice || 0,
+          totalPrice: item.totalPrice || (unitPrice * quantity),
           kitchenStatus: item.kitchenStatus || 'placed'
         };
       }));
 
       if (req.body.customerDetails) {
         order.customerDetails = req.body.customerDetails;
+      }
+
+      if (req.body.paymentMethod !== undefined) {
+        order.paymentMethod = req.body.paymentMethod;
+      }
+      if (req.body.paymentStatus !== undefined) {
+        order.paymentStatus = req.body.paymentStatus;
+      }
+      if (req.body.cashReceived !== undefined) {
+        order.cashReceived = req.body.cashReceived;
+      }
+      if (req.body.balance !== undefined) {
+        order.balance = req.body.balance;
+      }
+
+      const subtotal = order.items.reduce((acc, item) => acc + (item.totalPrice || ((item.unitPrice || item.price || 0) * item.quantity)), 0);
+      order.subtotal = subtotal;
+      order.totalAmount = subtotal + (order.deliveryFee || 0) - (order.discount || 0) + (order.tax || 0);
+
+      if (!["cash", "upi/card", "online", "cod", "wallet", "Not Specified"].includes(order.paymentMethod)) {
+        order.paymentMethod = 'Not Specified';
+      }
+
+      if (!["paid", "unpaid", "refunded"].includes(order.paymentStatus)) {
+        order.paymentStatus = 'unpaid';
       }
 
       await order.save();

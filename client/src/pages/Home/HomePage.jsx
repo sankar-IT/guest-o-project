@@ -13,6 +13,7 @@ import MenuModal from '../../components/Menu/MenuModal';
 import StoreStatusBanner from '../../components/StoreStatus/StoreStatusBanner';
 import Loader from '../../components/Loader/Loader';
 import OffersCarousel from '../../components/Offers/OffersCarousel';
+import socket from '../../services/socket';
 
 const heroImages = ['/heroSection/hero1.png', '/heroSection/hero2.png', '/heroSection/hero3.png', '/heroSection/hero4.png', '/heroSection/hero5.png'];
 
@@ -22,7 +23,10 @@ const HomePage = () => {
   const [menus, setMenus] = useState([]);
   const [categories, setCategories] = useState([]);
   const [trendingItems, setTrendingItems] = useState([]);
+  const [isFirstVisit] = useState(() => !sessionStorage.getItem('home_visited'));
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [bogoOnly, setBogoOnly] = useState(false);
+  const [comboOnly, setComboOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -56,6 +60,7 @@ const HomePage = () => {
     fetchCategories();
     fetchMenus();
     fetchTrendingDishes();
+    sessionStorage.setItem('home_visited', 'true');
 
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -63,8 +68,50 @@ const HomePage = () => {
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
+
+    // Socket Setup
+    if (!socket.connected) socket.connect();
+
+    socket.on('stockUpdate', ({ itemId, totalStock, isBlocked }) => {
+      const receivedId = (itemId?._id || itemId || '').toString();
+      setMenus(prev => prev.map(menu => {
+        if (menu._id.toString() === receivedId) {
+          return { 
+            ...menu, 
+            totalStock: totalStock !== undefined ? totalStock : menu.totalStock,
+            isBlocked: isBlocked !== undefined ? isBlocked : menu.isBlocked 
+          };
+        }
+        return menu;
+      }));
+
+      setSelectedMenuForModal(prev => {
+        if (prev && prev._id.toString() === receivedId) {
+          return { 
+            ...prev, 
+            totalStock: totalStock !== undefined ? totalStock : prev.totalStock,
+            isBlocked: isBlocked !== undefined ? isBlocked : prev.isBlocked
+          };
+        }
+        return prev;
+      });
+    });
+
+    socket.on('categoryUpdate', () => {
+      fetchCategories();
+      fetchMenus(selectedCategory, page, bogoOnly, comboOnly);
+    });
+
+    socket.on('offerUpdate', () => {
+      // Offers are mostly handled via CartContext, but we might want to refresh menus if price changes
+      fetchMenus(selectedCategory, page, bogoOnly, comboOnly);
+    });
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      socket.off('stockUpdate');
+      socket.off('categoryUpdate');
+      socket.off('offerUpdate');
     };
   }, []);
 
@@ -95,7 +142,7 @@ const HomePage = () => {
     }
   }, []);
 
-  const fetchMenus = useCallback(async (categoryId = 'all', pageNum = 1) => {
+  const fetchMenus = useCallback(async (categoryId = selectedCategory, pageNum = page, isBogo = bogoOnly, isCombo = comboOnly, search = debouncedSearchQuery, dietary = dietaryFilter, sort = sortBy) => {
     try {
       if (pageNum === 1) {
         setLoading(true);
@@ -103,9 +150,14 @@ const HomePage = () => {
         setLoadingMore(true);
       }
 
-      const url = categoryId === 'all'
-        ? `/api/menus?page=${pageNum}&limit=6`
-        : `/api/menus?category=${categoryId}&page=${pageNum}&limit=6`;
+      const currentLimit = 10;
+      let url = `/api/menus?page=${pageNum}&limit=${currentLimit}`;
+      if (categoryId !== 'all') url += `&category=${categoryId}`;
+      if (isBogo) url += `&bogo=true`;
+      if (isCombo) url += `&combo=true`;
+      if (search) url += `&search=${encodeURIComponent(search)}`;
+      if (dietary !== 'all') url += `&dietary=${dietary}`;
+      if (sort !== 'default') url += `&sortBy=${sort}`;
 
       const response = await api.get(url);
 
@@ -115,14 +167,14 @@ const HomePage = () => {
         setMenus(prev => [...prev, ...response.data]);
       }
 
-      setHasMore(response.data.length === 6);
+      setHasMore(response.data.length === currentLimit);
     } catch (error) {
       console.error('Error fetching menus:', error);
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, []);
+  }, [selectedCategory, bogoOnly, comboOnly, debouncedSearchQuery, dietaryFilter, sortBy]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -147,58 +199,78 @@ const HomePage = () => {
 
   useEffect(() => {
     if (page > 1) {
-      fetchMenus(selectedCategory, page);
+      fetchMenus(selectedCategory, page, bogoOnly, comboOnly, debouncedSearchQuery, dietaryFilter, sortBy);
     }
-  }, [page, selectedCategory, fetchMenus]);
+  }, [page, selectedCategory, bogoOnly, comboOnly, debouncedSearchQuery, dietaryFilter, sortBy, fetchMenus]);
+
+  useEffect(() => {
+    // Only fetch on search, sort, or dietary change. Category changes have their own handlers.
+    setPage(1);
+    setHasMore(true);
+    fetchMenus(selectedCategory, 1, bogoOnly, comboOnly, debouncedSearchQuery, dietaryFilter, sortBy);
+  }, [debouncedSearchQuery, dietaryFilter, sortBy]);
 
   const handleCategoryChange = useCallback((categoryId) => {
     setSelectedCategory(categoryId);
+    setBogoOnly(false);
+    setComboOnly(false);
     setPage(1);
     setHasMore(true);
-    fetchMenus(categoryId, 1);
+    fetchMenus(categoryId, 1, false, false, debouncedSearchQuery, dietaryFilter, sortBy);
+  }, [debouncedSearchQuery, dietaryFilter, sortBy, fetchMenus]);
+
+  const handleBogoFilter = useCallback(() => {
+    setSelectedCategory('all');
+    setBogoOnly(true);
+    setComboOnly(false);
+    setPage(1);
+    setHasMore(true);
+    fetchMenus('all', 1, true, false, debouncedSearchQuery, dietaryFilter, sortBy);
+  }, [debouncedSearchQuery, dietaryFilter, sortBy, fetchMenus]);
+
+  const handleComboFilter = useCallback(() => {
+    setSelectedCategory('all');
+    setBogoOnly(false);
+    setComboOnly(true);
+    setPage(1);
+    setHasMore(true);
+    fetchMenus('all', 1, false, true, debouncedSearchQuery, dietaryFilter, sortBy);
+  }, [debouncedSearchQuery, dietaryFilter, sortBy, fetchMenus]);
+
+  const clearAllFilters = useCallback(() => {
+    setSelectedCategory('all');
+    setBogoOnly(false);
+    setComboOnly(false);
+    setSortBy('default');
+    setDietaryFilter('all');
+    setSearchQuery('');
+    setPage(1);
+    setHasMore(true);
+    // Notice that debouncedSearchQuery will update shortly after searchQuery, 
+    // but we can proactively trigger fetch with empty search
+    fetchMenus('all', 1, false, false, '', 'all', 'default');
   }, [fetchMenus]);
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login', { replace: true });
+    if (localStorage.getItem('user')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/login', { replace: true });
+    } else {
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+      navigate('/admin/login', { replace: true });
+    }
   }, [navigate]);
 
   const filteredMenus = useMemo(() => {
-    let result = menus.filter(menu => {
-      const matchesSearch = menu.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
-      const matchesDietary = dietaryFilter === 'all' ||
-        (dietaryFilter === 'veg' && menu.foodType === 'veg') ||
-        (dietaryFilter === 'non-veg' && menu.foodType === 'non-veg');
-      return matchesSearch && matchesDietary;
-    });
-
-    if (sortBy === 'price-low') {
-      result.sort((a, b) => {
-        const getMinPrice = (m) => {
-          const variants = m.variants || m.sizes || [];
-          return variants.length > 0 ? Math.min(...variants.map(v => v.price)) : (m.offerPrice || 0);
-        };
-        return getMinPrice(a) - getMinPrice(b);
-      });
-    } else if (sortBy === 'price-high') {
-      result.sort((a, b) => {
-        const getMinPrice = (m) => {
-          const variants = m.variants || m.sizes || [];
-          return variants.length > 0 ? Math.min(...variants.map(v => v.price)) : (m.offerPrice || 0);
-        };
-        return getMinPrice(b) - getMinPrice(a);
-      });
-    } else if (sortBy === 'name-az') {
-      result.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sortBy === 'rating') {
-      result.sort((a, b) => (b.rating || 4.5) - (a.rating || 4.5));
-    }
-
-    return result;
-  }, [menus, debouncedSearchQuery, sortBy, dietaryFilter]);
+    // We moved all filtering and sorting to the backend for infinite scrolling!
+    return menus;
+  }, [menus]);
 
   const getCategoryName = () => {
+    if (bogoOnly) return 'BOGO Offers';
+    if (comboOnly) return 'Special Combos';
     if (selectedCategory === 'all') return 'All Dishes';
     const cat = categories.find(c => c._id === selectedCategory);
     return cat ? cat.name : 'Dishes';
@@ -237,16 +309,21 @@ const HomePage = () => {
       </div>
 
       {/* Weekend & Special Offers Banner */}
-      <OffersCarousel 
+      <OffersCarousel
         onOfferClick={(offer) => {
-          // If it's a category offer, filter by category
-          if (offer.applicableCategories?.length > 0) {
+          if (offer.offerType === 'bogo') {
+            handleBogoFilter();
+          } else if (offer.offerType === 'combo') {
+            handleComboFilter();
+          } else if (offer.applicableCategories?.length > 0) {
             handleCategoryChange(offer.applicableCategories[0]._id);
           } else {
-            // Otherwise show all and let the filter handle tags (Future expansion)
             setSelectedCategory('all');
+            setBogoOnly(false);
+            setComboOnly(false);
+            fetchMenus('all', 1, false, false);
           }
-          
+
           const menuElement = document.getElementById('menu');
           if (menuElement) {
             menuElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -269,6 +346,7 @@ const HomePage = () => {
 
         <div className="pb-32">
           <MenuSection
+            title={getCategoryName()}
             loading={loading}
             filteredMenus={filteredMenus}
             addToCart={addToCart}
@@ -281,6 +359,11 @@ const HomePage = () => {
             observerTarget={observerTarget}
             hasMore={hasMore}
             loadingMore={loadingMore}
+            selectedCategory={selectedCategory}
+            bogoOnly={bogoOnly}
+            comboOnly={comboOnly}
+            searchQuery={searchQuery}
+            onClearAll={clearAllFilters}
             onAddClick={(menu) => {
               setSelectedMenuForModal(menu);
               setIsModalOpen(true);

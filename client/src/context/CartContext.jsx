@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../api/axiosInstance';
-import { showToast } from '../utils/sweetAlert';
+import { showToast, showCartToast } from '../utils/sweetAlert';
+import socket from '../services/socket';
 
 const CartContext = createContext();
 
@@ -14,6 +15,49 @@ export const CartProvider = ({ children }) => {
     fetchCart();
     fetchSettings();
     fetchOffers();
+
+    // Socket Setup
+    if (!socket.connected) socket.connect();
+
+    socket.on('stockUpdate', ({ itemId, totalStock, isBlocked }) => {
+      const receivedId = (itemId?._id || itemId || '').toString();
+      setCartItems(prev => prev.map(item => {
+        // Find the actual Menu Item ID in our flattened cart item structure
+        const itemMenuId = (
+          item.menuItemId || 
+          (item.menuItem && (item.menuItem._id || item.menuItem)) || 
+          item._id || 
+          ''
+        ).toString();
+
+        if (itemMenuId === receivedId) {
+          return { 
+            ...item, 
+            totalStock: totalStock !== undefined ? totalStock : item.totalStock,
+            isBlocked: isBlocked !== undefined ? isBlocked : item.isBlocked
+          };
+        }
+        return item;
+      }));
+    });
+
+    socket.on('offerUpdate', () => {
+      fetchOffers();
+    });
+    
+    socket.on('settingsUpdate', (newSettings) => {
+      if (newSettings) {
+        setSettings(newSettings);
+      } else {
+        fetchSettings();
+      }
+    });
+
+    return () => {
+      socket.off('stockUpdate');
+      socket.off('offerUpdate');
+      socket.off('settingsUpdate');
+    };
   }, []);
 
   const fetchCart = async () => {
@@ -60,7 +104,7 @@ export const CartProvider = ({ children }) => {
       });
       if (response.data.success) {
         setCartItems(response.data.data.items);
-        showToast('success', 'Added to Feast');
+        showCartToast(menuItem);
       }
     } catch (error) {
       showToast('error', error.response?.data?.message || 'Failed to add item');
@@ -88,7 +132,6 @@ export const CartProvider = ({ children }) => {
       const response = await api.delete(`/api/cart/${id}`);
       if (response.data.success) {
         setCartItems(response.data.data.items);
-        showToast('success', 'Removed from Feast');
       }
     } catch (error) {
       showToast('error', 'Failed to remove item');
@@ -106,9 +149,10 @@ export const CartProvider = ({ children }) => {
 
   const checkStoreStatus = useCallback(() => {
     if (!settings?.operationalSettings) return { isOpen: true };
-    const { isAlwaysOpen, manualClose, storeHours } = settings.operationalSettings;
-    if (manualClose) return { isOpen: false, reason: 'Store is temporarily closed' };
-    if (isAlwaysOpen) return { isOpen: true };
+    const { isStoreOpen, isHolidayMode, businessHours } = settings.operationalSettings;
+    
+    if (isHolidayMode) return { isOpen: false, reason: 'holiday' };
+    if (isStoreOpen === false) return { isOpen: false, reason: 'manual_close' };
 
     // BULLETPROOF IST CALCULATION (UTC + 5:30)
     const now = new Date();
@@ -117,32 +161,68 @@ export const CartProvider = ({ children }) => {
 
     const day = istDate.toLocaleDateString('en-US', { weekday: 'long' });
 
-    // Check both "Tuesday" and "tuesday" for safety
-    const hours = storeHours?.[day] || storeHours?.[day.toLowerCase()];
-
-    // If hours are missing for this day, we'll assume open to prevent accidental lockouts
-    if (hours && !hours.isOpen) return { isOpen: false, reason: `Closed on ${day}` };
-    if (!hours) return { isOpen: true };
-
-    // Robust Time Parsing (Handles "11:00", "11.00", etc.)
-    const parseTime = (timeStr) => {
-      if (!timeStr) return 0;
-      const parts = timeStr.replace('.', ':').split(':');
-      const h = parseInt(parts[0], 10) || 0;
-      const m = parseInt(parts[1], 10) || 0;
-      return h * 60 + m;
-    };
-
-    const currentTime = istDate.getHours() * 60 + istDate.getMinutes();
-    const openMinutes = parseTime(hours.openTime);
-    const closeMinutes = parseTime(hours.closeTime);
-
-    if (currentTime < openMinutes) {
-      return { isOpen: false, reason: `We open at ${hours.openTime}` };
+    // Check if today is a closed day
+    const closedDays = businessHours?.closedDays || [];
+    const isClosedToday = closedDays.some(d => d.toLowerCase() === day.toLowerCase());
+    if (isClosedToday) {
+      return { isOpen: false, reason: 'closed_day' };
     }
 
-    if (currentTime > closeMinutes) {
-      return { isOpen: false, reason: `We are closed for today` };
+    if (businessHours?.open && businessHours?.close) {
+      // Robust Time Parsing (Handles "11:00", "11.00", etc.)
+      const parseTime = (timeStr) => {
+        if (!timeStr) return 0;
+        const parts = timeStr.replace('.', ':').split(':');
+        const h = parseInt(parts[0], 10) || 0;
+        const m = parseInt(parts[1], 10) || 0;
+        return h * 60 + m;
+      };
+
+      // Format HH:mm string to 12-hour AM/PM format
+      const format12Hour = (timeStr) => {
+        if (!timeStr) return '';
+        const parts = timeStr.replace('.', ':').split(':');
+        let h = parseInt(parts[0], 10) || 0;
+        const m = parseInt(parts[1], 10) || 0;
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        h = h ? h : 12; // the hour '0' should be '12'
+        const mStr = m < 10 ? `0${m}` : m;
+        return `${h}:${mStr} ${ampm}`;
+      };
+
+      const currentTime = istDate.getHours() * 60 + istDate.getMinutes();
+      const openMinutes = parseTime(businessHours.open);
+      const closeMinutes = parseTime(businessHours.close);
+
+      let isStoreCurrentlyOpen = true;
+      let reason = '';
+
+      if (closeMinutes < openMinutes) {
+        // CROSSES MIDNIGHT (e.g. 11:00 AM to 12:57 AM the next morning)
+        if (currentTime >= openMinutes || currentTime <= closeMinutes) {
+          isStoreCurrentlyOpen = true;
+        } else {
+          isStoreCurrentlyOpen = false;
+          reason = `We open at ${format12Hour(businessHours.open)}`;
+        }
+      } else {
+        // DOES NOT CROSS MIDNIGHT (e.g. 09:00 AM to 10:00 PM)
+        if (currentTime >= openMinutes && currentTime <= closeMinutes) {
+          isStoreCurrentlyOpen = true;
+        } else {
+          isStoreCurrentlyOpen = false;
+          if (currentTime < openMinutes) {
+            reason = `We open at ${format12Hour(businessHours.open)}`;
+          } else {
+            reason = `We closed at ${format12Hour(businessHours.close)}`;
+          }
+        }
+      }
+
+      if (!isStoreCurrentlyOpen) {
+        return { isOpen: false, reason };
+      }
     }
 
     return { isOpen: true };
@@ -265,7 +345,6 @@ export const CartProvider = ({ children }) => {
         const bogoSize = parseInt(o.offerValue) || 2;
         return (
           o.offerType === 'bogo' &&
-          item.remainingQty >= bogoSize && // Must have at least bundleSize items to get a free one
           (o.applicableItems?.some(bi => (bi.menuItem?._id || bi.menuItem || '').toString().toLowerCase() === itemId) ||
             o.applicableCategories?.some(catId => (catId._id || catId || '').toString().toLowerCase() === itemCatId))
         );
@@ -273,7 +352,7 @@ export const CartProvider = ({ children }) => {
 
       if (bogoOffer) {
         const bundleSize = parseInt(bogoOffer.offerValue) || 2;
-        // BOGO application log removed
+        const paidCount = Math.floor(item.remainingQty / bundleSize) * (bundleSize - 1) + (item.remainingQty % bundleSize);
         totalSubtotal += paidCount * (item.originalPrice || 0);
         item.remainingQty = 0;
         return;
